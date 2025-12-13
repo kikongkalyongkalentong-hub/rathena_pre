@@ -1,0 +1,44 @@
+//-- NPC script wrapper --
+// The name can be anything you choose (e.g., IdentifyAll_System)
+-	script	IdentifyAll_System	-1,{
+//-- End of wrapper --
+
+
+/*-----------------------------------
+identifyall()
+-------------------------------------
+by Mumbles
+-------------------------------------
+Identifies all unidentified items in
+user's inventory and returns the
+number of items identified.
+-----------------------------------*/
+function identifyall {
+	
+	getinventorylist();
+	// Initialize local variables
+	.@j = 0;
+	
+	// Loop through all inventory items
+	for(.@i = 0; .@i < getarraysize(@inventorylist_id); .@i++) {
+		if(!@inventorylist_identify[.@i]) {	// If current item is not identified
+			// Store the ID of the unidentified item for processing
+			.@unidentified_id[.@j++] = @inventorylist_id[.@i];	
+		}
+	}
+	
+	// Loop through all stored unidentified items
+	for(.@k = 0; .@k < getarraysize(.@unidentified_id); .@k++) {
+		identify(.@unidentified_id[.@k]);	// Identify all unidentified items
+	}
+	
+	return .@k;	// Return amount of items identified
+	
+}
+
+// Example use (this part assumes you have a running NPC instance that calls this script)
+message strcharinfo(PC_NAME), identifyall() + " items have been identified.";
+
+//-- Wrapper ends here --
+end;
+}

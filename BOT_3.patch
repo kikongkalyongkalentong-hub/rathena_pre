@@ -1,0 +1,354 @@
+Index: db/const.txt
+===================================================================
+--- db/const.txt	(revision 14530)
++++ db/const.txt	(working copy)
+@@ -1258,6 +1258,7 @@
+ SC__CHAOS	577
+ SC__FEINTBOMB_MASTER	578
+ SC_FALLENEMPIRE	579
++SC_BOT	581
+ 
+ e_gasp	0
+ e_what	1
+Index: db/sc_config.txt
+===================================================================
+--- db/sc_config.txt	(revision 14530)
++++ db/sc_config.txt	(working copy)
+@@ -14,6 +14,7 @@
+ //Example:
+ //SC_ENDURE, 21 //SC_ENDURE: cannot be removed by death and dispell and cosidered as buff. (16 + 4 + 1 = 21)
+ 
++SC_BOT, 6
+ SC_PROVOKE, 32	
+ SC_ENDURE, 21	
+ SC_CLOAKING, 2
+Index: npc/bot.txt
+===================================================================
+--- npc/bot.txt	(revision 0)
++++ npc/bot.txt	(working copy)
+@@ -0,0 +1,51 @@
++//
++//
++//	Author		Goddameit
++//	Version		2015/12/20
++//	Web		http://goo.gl/0vY9GV
++//
++//
++-	script	bot_at	-1,{
++	function	__onoff	;
++OnInit:
++	bindatcmd "boton",strnpcinfo(3)+"::OnDo";
++	bindatcmd "botoff",strnpcinfo(3)+"::OnDo2";
++	bindatcmd "botend",strnpcinfo(3)+"::OnDo2";
++	end;
++OnDo:
++	sc_end SC_BOT;
++	.@SP_BOT_NA = 1;
++	while(1)
++	{
++		.@C = select("[Finish]","[Cancel]","Normal Attack "+__onoff(.@SP_BOT_NA))k;
++		if( .@C == 1 )
++			break;
++		else if( .@C == 2 )
++			close;
++		else
++			switch(.@C)
++			{
++				case 3:
++					.@SP_BOT_NA = !.@SP_BOT_NA;
++					break;
++			}
++	}
++	message strcharinfo(0),"RUN";
++	if( .@C == 1 || .@C > 2 )
++	{
++		mes "OK";
++		close2;
++	}
++	sc_start4 SC_BOT,600000,.@SP_BOT_NA,0,0,0;
++	end;
++OnDo2:
++	sc_end SC_BOT;
++	message strcharinfo(0),"END";
++	end;
++	function	__onoff	{
++		if(getarg(0) == 0)
++			return "^BEBEBE[OFF]^000000";
++		else
++			return "^000088[ON]^000000";
++	}
++}
+\ No newline at end of file
+Index: src/map/status.c
+===================================================================
+--- src/map/status.c	(revision 14530)
++++ src/map/status.c	(working copy)
+@@ -8982,6 +8982,10 @@
+ 				if(val2 == MH_MD_FIGHTING) val2 = MH_MD_GRAPPLING;
+ 				else val2 = MH_MD_FIGHTING;
+ 				break;
++			case SC_BOT:
++				tick_time = 100;
++				val4 = tick / tick_time;
++				break;
+ 			case SC_FULL_THROTTLE:
+ 				status_percent_heal(bl,100,0);
+ 				val2 = 7 - val1;
+@@ -9701,6 +9705,15 @@
+ 					}
+ 		}
+ 	}
++	
++	if (type == SC_BOT)
++	{
++		if (sc->data[type]->val4 > 0)
++		{
++			//Record how many time you left
++			pc->setreg(sd, script->add_str("@SP_BOT_LTICK"), sc->data[type]->val4 * 100);
++		}
++	}
+ 
+ 	(sc->count)--;
+ 
+@@ -10464,6 +10477,145 @@
+ } while(0)
+ 
+ 	switch(type) {
++	case SC_BOT:
++		if (--(sce->val4) > 0) {
++			{
++				int i_ = 0;
++				struct mmo_charstatus *sta = &sd->status;
++				unsigned short inf_ = 0;
++				int64 last_tick = (int64)time(NULL);
++				unsigned short idle_ = cap_value(DIFF_TICK32(last_tick, sd->idletime), 0, USHRT_MAX);
++				unsigned short tele_ = cap_value(DIFF_TICK32(last_tick, pc->readreg(sd, script->add_str("@SP_BOT_TELE"))), 0, USHRT_MAX);
++				unsigned int starget_id_ = bot_check_target_alive(bl, pc->readreg(sd, script->add_str("@SP_BOT_TGID")));
++				{//Heal
++					unsigned short item_id_ = sta->hotkeys[9].id;
++					if ((sd->battle_status.hp * 100 / 80) < sd->battle_status.max_hp && item_id_ > 0)
++					{
++						i_ = pc->search_inventory(sd, item_id_);
++						if (i_ >= 0)
++							pc->useitem(sd, i_);
++					}
++					item_id_ = sta->hotkeys[10].id;
++					if ((sd->battle_status.sp * 100 / 80) < sd->battle_status.max_sp && item_id_ > 0)
++					{
++						i_ = pc->search_inventory(sd, item_id_);
++						if (i_ >= 0)
++							pc->useitem(sd, i_);
++					}
++				}
++				{//Buff
++					for (i_ = 2; i_ <= 6; i_++)
++					{
++						if ((inf_ = bot_chec_khotkeys_is_skill(sd, i_)) > 0)
++						{
++							unsigned short id_ = sta->hotkeys[i_].id;
++							if (inf_ == 4 || inf_ == 16)
++							{
++								if (!sc->data[status->skill2sc(id_)])
++									unit->skilluse_id(bl, bl->id, id_, sta->hotkeys[i_].lv);
++							}
++						}
++					}
++				}
++				if (idle_ % 7 != 0)//Attack
++				{
++					{
++						unsigned short inf_ = 0;
++						starget_id_ = bot_check_target_alive(bl, pc->readreg(sd, script->add_str("@SP_BOT_TGID")));
++						if (starget_id_ > 0) {
++							if (sce->val1 > 0)
++							{
++								switch (rand() % 10)
++								{
++								case 0:
++								case 1:
++								case 2:
++									inf_ = bot_chec_khotkeys_is_skill(sd, 7);
++									if (inf_ == 1)
++									{
++										unit->stop_attack(bl);
++										unit->skilluse_id(bl, starget_id_, sta->hotkeys[7].id, sta->hotkeys[7].lv);
++									}
++									break;
++								case 5:
++								case 6:
++									inf_ = bot_chec_khotkeys_is_skill(sd, 8);
++									if (inf_ == 1)
++									{
++										unit->stop_attack(bl);
++										unit->skilluse_id(bl, starget_id_, sta->hotkeys[8].id, sta->hotkeys[8].lv);
++									}
++									break;
++								default:
++									unit->attack(bl, starget_id_, 1);
++									break;
++								}
++							}
++							else
++							{
++								switch (rand() % 7)
++								{
++								case 0:
++								case 1:
++								case 2:
++								case 3:
++								case 4:
++									inf_ = bot_chec_khotkeys_is_skill(sd, 7);
++									if (inf_ == 1)
++									{
++										unit->skilluse_id(bl, starget_id_, sta->hotkeys[7].id, sta->hotkeys[7].lv);
++									}
++									break;
++								case 5:
++								case 6:
++									inf_ = bot_chec_khotkeys_is_skill(sd, 8);
++									if (inf_ == 1)
++									{
++										unit->skilluse_id(bl, starget_id_, sta->hotkeys[8].id, sta->hotkeys[8].lv);
++									}
++									break;
++								}
++							}
++						}
++					}
++				}
++				else
++				{//Move
++					bool flywing_ = false;
++					if (bot_check_target(bl, starget_id_) == false)
++					{
++						if (tele_ > 7)
++						{
++							if (sta->hotkeys[0].type == 0 && sta->hotkeys[0].id == 601 && sta->hotkeys[0].lv == 0)
++							{
++								i_ = pc->search_inventory(sd, 601);
++								if (i_ >= 0)
++								{
++									pc->useitem(sd, i_);
++									flywing_ = true;
++								}
++							}
++							if ((st->sp > 20) && (flywing_ == false) && (sta->hotkeys[1].type == 1 && sta->hotkeys[1].id == AL_TELEPORT && sta->hotkeys[1].lv > 0))
++							{
++								if (pc->checkskill(sd, AL_TELEPORT) > 0)
++								{
++									pc->randomwarp(sd, CLR_TELEPORT);
++									status->heal(&sd->bl, 0, -(skill->get_sp(AL_TELEPORT, 1)), 1);
++									flywing_ = true;
++								}
++							}
++							if (flywing_ == true)
++								pc->setreg(sd, script->add_str("@SP_BOT_TELE"), last_tick);
++						}
++					}
++					if ((idle_ % 9 == 0 && idle_ > 0) || starget_id_ == 0)
++						unit->walktoxy(&sd->bl, sd->bl.x + (rand() % 2 == 0 ? -1 : 1)*(rand() % 10), sd->bl.y + (rand() % 2 == 0 ? -1 : 1)*(rand() % 10), 0);
++				}
++			}
++			sc_timer_next(100 + tick, status->change_timer, bl->id, data);
++			return 0;
++		}
++		break;
+ 		case SC_MAXIMIZEPOWER:
+ 		case SC_CLOAKING:
+ 			if(!status->charge(bl, 0, 1))
+@@ -12237,3 +12389,73 @@
+ 	status->readdb_refine = status_readdb_refine;
+ 	status->readdb_scconfig = status_readdb_scconfig;
+ }
++
++bool bot_check_target(struct block_list *src, unsigned int id)
++{
++	struct block_list *bl = map->id2bl(id);
++	if (bl)
++	{
++		if (path->search(NULL, src->m, src->x, src->y, bl->x, bl->y, 1, CELL_CHKNOREACH) && distance_xy(src->x, src->y, bl->x, bl->y) < 11)
++		{
++			TBL_MOB *md = BL_CAST(BL_MOB, bl);
++			if (md)
++			{
++				if (md->status.hp > 0)
++				{
++					return true;
++				}
++			}
++		}
++	}
++	return false;
++}
++
++int buildin_autoattack_sub(struct block_list *bl, va_list ap)
++{
++	int *target_id = va_arg(ap, int *);
++	int src_id = va_arg(ap, int);
++	struct block_list *src = map->id2bl(src_id);
++	if (!src || !bl)
++		return 1;
++	if (bot_check_target(src, bl->id) == true)
++		*target_id = bl->id;
++	else
++		*target_id = 0;
++	return 1;
++}
++
++short bot_chec_khotkeys_is_skill(struct map_session_data *sd, unsigned short idx)
++{
++	if (sd)
++	{
++		struct mmo_charstatus *sta = &sd->status;
++		if (sta)
++		{
++			if (sta->hotkeys[idx].type == 1 && pc->checkskill(sd, sta->hotkeys[idx].id) > 0 && sta->hotkeys[idx].lv > 0)
++				return skill->get_inf(sta->hotkeys[idx].id);
++		}
++	}
++	return -1;
++}
++
++unsigned int bot_check_target_alive(struct block_list *src, unsigned int id)
++{
++	if (bot_check_target(src, id) == true)
++		return id;
++	{
++		int i_, target_id_;
++		for (i_ = 0; i_ < 15; i_++)
++		{
++			target_id_ = 0;
++			map->foreachinarea(buildin_autoattack_sub, src->m, src->x - i_, src->y - i_, src->x + i_, src->y + i_, BL_MOB, &target_id_, src->id);
++			if (target_id_)
++			{
++				pc->setreg(map->id2sd(src->id), script->add_str("@SP_BOT_TGID"), target_id_);
++				break;
++			}
++		}
++		if (target_id_)
++			return target_id_;
++	}
++	return 0;
++}
+\ No newline at end of file
+Index: src/map/status.h
+===================================================================
+--- src/map/status.h	(revision 14530)
++++ src/map/status.h	(working copy)
+@@ -715,6 +715,7 @@
+ 	SC_FALLENEMPIRE,
+ 	SC_FLASHCOMBO,
+ 
++	SC_BOT,
+ 	SC_MAX, //Automatically updated max, used in for's to check we are within bounds.
+ } sc_type;
+ 
+@@ -2089,4 +2090,8 @@
+ 
+ void status_defaults(void);
+ 
++bool bot_check_target(struct block_list *src, unsigned int id);
++int buildin_autoattack_sub(struct block_list *bl, va_list ap);
++short bot_chec_khotkeys_is_skill(struct map_session_data *sd, unsigned short idx);
++unsigned int bot_check_target_alive(struct block_list *src, unsigned int id);
+ #endif /* MAP_STATUS_H */

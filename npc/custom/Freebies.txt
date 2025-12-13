@@ -1,0 +1,122 @@
+prontera,151,187,4	script	Freebies	832,{
+	mes "[Freebies NPC]";
+	mes "Welcome to Server Name!!";
+	if ( #NewbieGift > 0 )
+	{
+		next;
+	}
+	else
+	{
+		mes "Here's your freebies!";
+		getitem 12214,10;
+		getitem 12210,10;
+		getitem 12263,10;
+		// getitem 5826,5;
+		// getitem 569,30;
+		// getitem 12323,20;	
+		// getitem 4142,1;
+		set #NewbieGift, 1;	
+		next;
+	}
+	/*mes "Please select your class specific freebies that you want to get:";
+		switch(select("Swordsman:Archer:Mage:Acolyte:Merchant:Thief")) {
+			case 1:
+				if ( #SwordsmanReceived > 0 ) goto Recieved;
+				mes "[Freebies NPC]";
+				mes "Here's your freebies for Swordsman class";
+				rentitem2 1187,604800,1,10,0,4142,4147,0,0;
+				rentitem2 1310,604800,1,10,0,4142,4147,0,0;
+				rentitem2 13416,604800,1,10,0,4142,4147,0,0;
+				rentitem2 13042,604800,1,10,0,4142,4147,0,0;
+				rentitem2 13418,604800,1,10,0,4142,4147,0,0;
+				rentitem2 1486,604800,1,10,0,4142,4147,0,0;
+				rentitem2 1546,604800,1,10,0,4142,4147,0,0;
+				rentitem2 13417,604800,1,10,0,4142,4147,0,0;
+				rentitem2 1426,604800,1,10,0,4142,4147,0,0;
+				rentitem2 1382,604800,1,10,0,4142,4147,0,0;
+				set #SwordsmanReceived, 1;
+				goto Message1;
+				end;
+			case 2:
+				if ( #ArcherReceived > 0 ) goto Recieved;
+				mes "[Freebies NPC]";
+				mes "Here's your freebies for Archer class";
+				rentitem2 13177,604800,1,10,0,4142,4147,0,0;
+				rentitem2 13042,604800,1,10,0,4142,4147,0,0;
+				rentitem2 13179,604800,1,10,0,4142,4147,0,0;
+				rentitem2 1927,604800,1,10,0,4142,4147,0,0;
+				rentitem2 1743,604800,1,10,0,4142,4147,0,0;
+				rentitem2 1981,604800,1,10,0,4142,4147,0,0;
+				rentitem2 13110,604800,1,10,0,4142,4147,0,0;
+				rentitem2 13176,604800,1,10,0,4142,4147,0,0;
+				rentitem2 13178,604800,1,10,0,4142,4147,0,0;
+				rentitem2 13307,604800,1,10,0,4142,4147,0,0;
+				set #ArcherReceived, 1;
+				goto Message1;
+				end;	
+			case 3:
+				if ( #MageReceived > 0 ) goto Recieved;
+				mes "[Freebies NPC]";
+				mes "Here's your freebies for Mage class";
+				rentitem2 1640,604800,1,10,0,4142,4147,0,0;
+				rentitem2 1641,604800,1,10,0,4142,4147,0,0;
+				rentitem2 2002,604800,1,10,0,4142,4147,0,0;
+				rentitem2 13042,604800,1,10,0,4142,4147,0,0;
+				set #MageReceived, 1;
+				goto Message1;
+				end;
+			case 4:
+				if ( #AcolyteReceived > 0 ) goto Recieved;
+				mes "[Freebies NPC]";
+				mes "Here's your freebies for Acolyte class";
+				rentitem2 1577,604800,1,10,0,4142,4147,0,0;
+				rentitem2 1640,604800,1,10,0,4142,4147,0,0;
+				rentitem2 1826,604800,1,10,0,4142,4147,0,0;
+				rentitem2 1641,604800,1,10,0,4142,4147,0,0;
+				rentitem2 2002,604800,1,10,0,4142,4147,0,0;
+				rentitem2 1827,604800,1,10,0,4142,4147,0,0;
+				rentitem2 1546,604800,1,10,0,4142,4147,0,0;
+				rentitem2 1576,604800,1,10,0,4142,4147,0,0;
+				set #AcolyteReceived, 1;
+				goto Message1;
+				end;
+			case 5:
+				if ( #MerchantReceived > 0 ) goto Recieved;
+				mes "[Freebies NPC]";
+				mes "Here's your freebies for Merchant class";
+				rentitem2 1310,604800,1,10,0,4142,4147,0,0;
+				rentitem2 13416,604800,1,10,0,4142,4147,0,0;
+				rentitem2 13042,604800,1,10,0,4142,4147,0,0;
+				rentitem2 13418,604800,1,10,0,4142,4147,0,0;
+				rentitem2 1546,604800,1,10,0,4142,4147,0,0;
+				rentitem2 13417,604800,1,10,0,4142,4147,0,0;
+				rentitem2 1382,604800,1,10,0,4142,4147,0,0;
+				set #MerchantReceived, 1;
+				goto Message1;
+				end;
+			case 6:
+				if ( #ThieffReceived > 0 ) goto Recieved;
+				mes "[Freebies NPC]";
+				mes "Here's your freebies for Thief class";
+				rentitem2 1281,604800,1,10,0,4142,4147,0,0;
+				rentitem2 13416,604800,1,10,0,4142,4147,0,0;
+				rentitem2 13042,604800,1,10,0,4142,4147,0,0;
+				rentitem2 1743,604800,1,10,0,4142,4147,0,0;
+				rentitem2 1282,604800,1,10,0,4142,4147,0,0;
+				rentitem2 13417,604800,1,10,0,4142,4147,0,0;
+				set #ThieffReceived, 1;
+				goto Message1;
+				end;
+				}*/
+	
+	Message1:
+	mes "[Freebies NPC]";
+	mes "Start your awesome journey today.";
+	mes "If you need help. Please use @request / search for Game Staffs. Thank You.";
+	close;
+	
+	Recieved:
+	mes "[Freebies NPC]";
+	mes "You already recieved a freebies.";
+	close;
+	}

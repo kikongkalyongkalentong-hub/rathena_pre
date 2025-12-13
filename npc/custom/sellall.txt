@@ -1,0 +1,132 @@
+-	script	SellAllSystem	-1,{
+
+// ------------------------------------------------------
+// CONFIG
+// ------------------------------------------------------
+OnInit:
+	.sellall_auto_delete_zero_zeny = 1; // delete 0-zeny trash?
+	setarray .sellall_sold_categories[0], 3,4,5,7; // 3: Misc, 4: Armor, 5: Weapon, 7: Pet Egg
+    // Note: Type 11 (Usable: Delayed) is now handled explicitly below
+
+	bindatcmd "sellall", strnpcinfo(3)+"::OnSellAll", 0, 0;
+	bindatcmd "storeall", strnpcinfo(3)+"::OnStoreAll", 0, 0;
+
+	end;
+
+// ------------------------------------------------------
+// FUNCTION: SMART SELLALL + SMART STOREALL
+// ------------------------------------------------------
+F_SmartSellAll:
+
+	getinventorylist;
+	// ... (variable initializations) ...
+
+	// open storage once (Hercules requirement)
+	openstorage;
+
+	// loop through all inventory items
+	for (.@i = 0; .@i < @inventorylist_count; .@i++) {
+
+		.@id = @inventorylist_id[.@i];
+		.@amt = @inventorylist_amount[.@i];
+		.@equip = @inventorylist_equip[.@i];
+		.@refine = @inventorylist_refine[.@i];
+		.@card1 = @inventorylist_card1[.@i];
+		.@card2 = @inventorylist_card2[.@i];
+		.@card3 = @inventorylist_card3[.@i];
+		.@card4 = @inventorylist_card4[.@i];
+
+		.@type = getiteminfo(.@id, ITEMINFO_TYPE);
+		.@price = getiteminfo(.@id, ITEMINFO_SELLPRICE);
+
+		// skip equipped
+		if (.@equip) continue;
+        
+		// --- Custom Storage Routing Logic ---
+		// 1. Check for Usable Item Types: 0 (Healing), 2 (Usable: Other), 11 (Usable: Delayed)
+		if (.@type == 0 || .@type == 2 || .@type == 11) {
+			goto L_StoreItem;
+		}
+
+		// 2. Check for Refined items (store, do not sell)
+		if (.@refine > 0) {
+			goto L_StoreItem;
+		}
+		// --- End Custom Storage Routing Logic ---
+
+		// skip with cards
+		if (.@card1 || .@card2 || .@card3 || .@card4) continue;
+
+		// determine sellable category
+		.@sellable = 0;
+		for (.@x = 0; .@x < getarraysize(.sellall_sold_categories); .@x++) {
+			if (.@type == .sellall_sold_categories[.@x]) {
+				.@sellable = 1;
+				break;
+			}
+		}
+
+		// NOT sellable (by category) → store
+		if (!.@sellable) {
+L_StoreItem: // <<< Storage Logic Target
+			// We skip the expire/bound check here to force items we know we want to store
+			// into storage, overriding any default Hercules flags for Usable/Refined items.
+			delitem .@id, .@amt;
+			getitem .@id, .@amt; // Adds to storage since openstorage was called
+			.@stored_count++;
+			continue;
+		}
+
+		// Sellable category but expired/bound → skip
+        // Note: We only check expire/bound for items that are *sellable* now, 
+        // to prevent selling items you can't use.
+		if (.@expire || .@bound)
+			continue;
+
+		// delete 0-price trash
+		if (.@price <= 0 && .sellall_auto_delete_zero_zeny == 1) {
+			delitem .@id, .@amt;
+			.@sold_count++;
+			continue;
+		}
+
+		// sell normally
+		if (.@price > 0) {
+			// Removed explicit tax calculation (server usually handles this or use config)
+			.@total_zeny += (.@price * .@amt);
+			delitem .@id, .@amt;
+			.@sold_count++;
+			continue;
+		}
+	}
+
+	if (.@total_zeny > 0)
+		Zeny += .@total_zeny;
+
+	.@ret_sold_zeny = .@total_zeny;
+	.@ret_sold_count = .@sold_count;
+	.@ret_stored_count = .@stored_count;
+
+	return;
+
+OnSellAll:
+	callsub F_SmartSellAll;
+	if (.@ret_sold_count == 0 && .@ret_stored_count == 0) {
+		message strcharinfo(0), "Nothing sold or stored.";
+		end;
+	}
+	if (.@ret_sold_zeny > 0)
+		message strcharinfo(0), "Sold "+.@ret_sold_count+" items for "+.@ret_sold_zeny+" zeny.";
+	if (.@ret_stored_count > 0)
+		message strcharinfo(0), "Stored "+.@ret_stored_count+" items.";
+	end;
+
+OnStoreAll:
+	callsub F_SmartSellAll;
+	if (.@ret_stored_count == 0)
+		message strcharinfo(0), "Nothing stored.";
+	else
+		message strcharinfo(0), "Stored "+.@ret_stored_count+" items.";
+	end;
+
+}

@@ -1,0 +1,106 @@
+-	script	F_Autoloot	-1,{
+Onlootconfig:
+OnList:
+	mes "You can use ^0000FF"+.alootset+" autoloot configuration sets^000000.";
+	mes "For quick swap use command: ^0000FF@lootset <id>^000000.";
+	mes "Example: ^0000FF@lootset 1^000000";
+	mes "You can call autoloot settings with command: ^0000FF@lootconfig^000000";
+	setarray .@menu$[0], "";
+	for(.@i = 1; .@i <= .alootset; .@i++) {
+		.@menu$[.@i] = "Configuration �"+.@i;
+	}
+	.@set = select(implode(.@menu$, ":"))-1;
+	if(.@set == 0)
+		close;
+	
+OnEdit:
+	next;
+	deletearray .@aloot_set$[0],.alootsize;
+	explode(.@aloot_set$, #aloot_set$[.@set], ",");
+
+	mes "Configuration ^0000FF�"+(.@set)+"^000000";
+	mes "Total items: "+getarraysize(.@aloot_set$)+" / ^0000FF"+.alootsize+"^000000";
+	
+	setarray .@submenu$[0], "Cancel";
+	
+	if(getarraysize(.@aloot_set$) < 20)
+		.@submenu$[1] = "^0000FFAdd item^000000";
+	if(getarraysize(.@aloot_set$) > 0)
+		.@submenu$[.alootsize+2] = "^FF0000Remove all^000000";
+	
+	for(.@k = 2; .@k <= .alootsize+1; .@k++) {
+		if(.@aloot_set$[.@k-2])
+			.@submenu$[.@k] = .@k-1+") "+getitemname(atoi(.@aloot_set$[.@k-2]));
+		else
+			.@submenu$[.@k] = "";
+	}
+	
+	.@slot = select(implode(.@submenu$, ":"))-2;
+
+	if(.@slot == -1) {
+		next;
+		goto OnList;
+		close;
+	}
+	
+	// Add new item
+	if(.@slot == 0) {
+		mes "Input item ID";
+		input .@itemid;
+		if(getiteminfo(.@itemid, ITEMINFO_ID) != -1) {
+			mes "Added item: ^0000FF"+getitemname(atoi(.@itemid))+"^000000";
+			.@aloot_set$[getarraysize(.@aloot_set$)] = .@itemid;
+			#aloot_set$[.@set] = implode(.@aloot_set$, ",");
+		} else {
+			mes "Item not found.";
+		}
+		goto OnEdit;
+		close;
+	}
+	// Clear list
+	if(.@slot == .alootsize+1) {
+		mes "Configuration ^0000FF�"+(.@set)+"^000000 cleared.";
+		deletearray .@aloot_set$[0],.alootsize;
+		#aloot_set$[.@set] = "";
+		goto OnEdit;
+		close;
+	}
+	next;
+	mes "Configuration ^0000FF�"+(.@set)+"^000000";
+	mes "Item: ^0000FF"+getitemname(atoi(.@aloot_set$[.@slot-1]))+"^000000";
+	switch(select("Edit:Remove")) {
+		case 1:
+			mes "Input item ID";
+			input .@itemid;
+			if(getiteminfo(.@itemid, ITEMINFO_ID) != -1) {
+				mes "Changed to: ^0000FF"+getitemname(atoi(.@itemid))+"^000000";
+				.@aloot_set$[.@slot-1] = .@itemid;
+				#aloot_set$[.@set] = implode(.@aloot_set$, ",");
+			} else {
+				mes "Item not found.";
+			}
+			goto OnEdit;
+			close;
+		case 2:
+			deletearray .@aloot_set$[.@slot-1],1;
+			#aloot_set$[.@set] = implode(.@aloot_set$, ",");
+			close;
+	}
+	close;
+
+Onlootset:
+	atcommand "@alootid reset";
+	.@set = atoi(.@atcmd_parameters$[0]);
+	dispbottom "=== Autoloot Configuration �"+.@set+" ===";
+	explode(.@aloot_set$, #aloot_set$[.@set], ",");
+	for(.@i = 0; .@i < getarraysize(.@aloot_set$); .@i++)
+		atcommand "@alootid +" + atoi(.@aloot_set$[.@i]);
+	end;
+
+OnInit:
+	.alootset = 10; // Amount of allowed sets
+	.alootsize = 10; // Should be the same as�AUTOLOOTITEM_SIZE, you can edit this in�\src\config\core.hpp
+	bindatcmd("lootset", strnpcinfo(3) +"::Onlootset");
+	bindatcmd("lootconfig", strnpcinfo(3) +"::Onlootconfig");
+	end;
+}

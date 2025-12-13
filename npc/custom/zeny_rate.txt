@@ -1,0 +1,129 @@
+-	script	Zeny_Rate	-1,{
+
+// ------------------------------------------------------
+// Zeny Rate - rAthena-pre (always enabled, detailed logs)
+// ------------------------------------------------------
+
+OnInit:
+    // Zeny ranges for Small, Medium, Large monsters (change to taste)
+    setarray .zeny_small[0], 100, 1000;
+    setarray .zeny_medium[0], 1000, 5000;
+    setarray .zeny_large[0], 5000, 10000;
+
+    .zeny_mvp_mult = 10; // MVP multiplier
+
+    // Manual MVP list (rAthena-pre IDs) - extend as needed
+    setarray .mvp_list,
+        1115, // Eddga
+        1059, // Baphomet
+        1150, // Doppelganger
+        1147, // Drake
+        1159, // Golden Thief Bug
+        1312, // Moonlight Flower
+        1087, // Orc Lord
+        1190, // Orc Hero
+        1112, // Osiris
+        1038, // Pharaoh
+        1046, // Phreeoni
+        1373, // Samurai Specter
+        1492, // Tao Gunka
+        1157, // Stormy Knight
+        1272, // Turtle General
+        1039; // Maya
+
+    bindatcmd("checkzenyscript", strnpcinfo(3) + "::OnTest");
+    debugmes "[ZenyRate] Initialized (rAthena-pre)";
+    end;
+
+// NOTE: This script is ALWAYS enabled (no per-player toggle).
+// If you want per-player toggles later, we can add them.
+
+OnNPCKillEvent:
+    // Try several possible event variables to find the monster DB id.
+    // rAthena-pre commonly has 'killedrid' (the DB-ID). We'll try fallbacks.
+    set .@mob_id, killedrid;
+    if (.@mob_id <= 0) set .@mob_id, killedmobid;
+    if (.@mob_id <= 0) set .@mob_id, killedgid;
+    if (.@mob_id <= 0) set .@mob_id, killedid;
+
+    // Log all raw event vars (safe debug)
+    debugmes sprintf("[ZenyRate] event vars: killedrid=%d killedmobid=%d killedgid=%d killedid=%d -> selected mob_id=%d",
+        killedrid, killedmobid, killedgid, killedid, .@mob_id);
+
+    // Safety check
+    if (.@mob_id <= 0) {
+        debugmes "[ZenyRate] ERROR: Could not determine mob DB id. Aborting.";
+        end;
+    }
+
+    // Try to get monster info. On pre-re builds, size index is 19 (MOB_SIZE).
+    .@size = getmonsterinfo(.@mob_id, MOB_SIZE); // 0 = small, 1 = medium, 2 = large
+    .@mvp = 0;
+
+    // Basic name fetch (may be empty on weird builds)
+    .@mname$ = getmonsterinfo(.@mob_id, MOB_NAME); // MOB_NAME often index 2 in pre; using getmonsterinfo constant is ok too.
+
+    // Check if mob is in our MVP list
+    .@i = 0;
+    while (.@i < getarraysize(.mvp_list)) {
+        if (.mvp_list[.@i] == .@mob_id) {
+            set .@mvp, 1;
+            break;
+        }
+        set .@i, .@i + 1;
+    }
+
+    debugmes sprintf("[ZenyRate] mob_id=%d name='%s' size=%d mvp=%d",
+        .@mob_id, .@mname$, .@size, .@mvp);
+
+    // Determine base zeny range
+    if (.@mvp == 1) {
+        set .@min, .zeny_large[0];
+        set .@max, .zeny_large[1];
+    }
+    else if (.@size == 0) {
+        set .@min, .zeny_small[0];
+        set .@max, .zeny_small[1];
+    }
+    else if (.@size == 1) {
+        set .@min, .zeny_medium[0];
+        set .@max, .zeny_medium[1];
+    }
+    else {
+        // Default to large if size unknown
+        set .@min, .zeny_large[0];
+        set .@max, .zeny_large[1];
+    }
+
+    // Apply MVP multiplier if matched
+    if (.@mvp == 1) {
+        set .@min, .@min * .zeny_mvp_mult;
+        set .@max, .@max * .zeny_mvp_mult;
+
+        debugmes sprintf("[ZenyRate] MVP multiplier applied. range=%d..%d", .@min, .@max);
+    }
+
+    // Generate and award Zeny
+    if (.@min > 0 && .@max >= .@min) {
+        set .@gain, rand(.@min, .@max);
+        Zeny += .@gain;
+
+        // Server console log
+        debugmes sprintf("[ZenyRate] Granted %d zeny to charid=%d for killing mob_id=%d ('%s')",
+            .@gain, getcharid(3), .@mob_id, .@mname$);
+
+        // Short message to player (floating bottom text)
+        dispbottom "[ZenyRate] +" + .@gain + " zeny";
+    } else {
+        debugmes "[ZenyRate] Skipped grant because invalid range.";
+    }
+
+    end;
+
+// Small test command for debugging
+OnTest:
+    debugmes "[ZenyRate] OnTest called.";
+    dispbottom "ZenyRate (rAthena-pre) loaded.";
+    end;
+
+}

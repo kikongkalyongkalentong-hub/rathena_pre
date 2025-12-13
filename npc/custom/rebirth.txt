@@ -1,0 +1,222 @@
+//==============================================================
+// Spirit Master NPC (Rebirth)
+// Location: prontera,138,175
+// Purpose: Handles 100 levels of rebirth, granting bonus stats.
+// The Zeny cost now scales from 1M up to 991M.
+//==============================================================
+prontera,138,175,5	script	Spirit Master	600,{
+
+	// === CONFIG ===
+	.@blvl = 99;
+	.@max_rebirth = 100;
+	
+	// --------------------------------------------------------------------------
+	// ZENY COST ARRAY (100 values) - Defines the Zeny cost for Rebirth N+1.
+	// Cost scales linearly from 1M up to 991M.
+	// --------------------------------------------------------------------------
+	setarray .@zeny_costs[0], 1000000, 11000000, 21000000, 31000000, 41000000, 51000000, 61000000, 71000000, 81000000, 91000000,
+	101000000, 111000000, 121000000, 131000000, 141000000, 151000000, 161000000, 171000000, 181000000, 191000000,
+	201000000, 211000000, 221000000, 231000000, 241000000, 251000000, 261000000, 271000000, 281000000, 291000000,
+	301000000, 311000000, 321000000, 331000000, 341000000, 351000000, 361000000, 371000000, 381000000, 391000000,
+	401000000, 411000000, 421000000, 431000000, 441000000, 451000000, 461000000, 471000000, 481000000, 491000000,
+	501000000, 511000000, 521000000, 531000000, 541000000, 551000000, 561000000, 571000000, 581000000, 591000000,
+	601000000, 611000000, 621000000, 631000000, 641000000, 651000000, 661000000, 671000000, 681000000, 691000000,
+	701000000, 711000000, 721000000, 731000000, 741000000, 751000000, 761000000, 771000000, 781000000, 791000000,
+	801000000, 811000000, 821000000, 831000000, 841000000, 851000000, 861000000, 871000000, 881000000, 891000000,
+	901000000, 911000000, 921000000, 931000000, 941000000, 951000000, 961000000, 971000000, 981000000, 991000000;
+	
+	// stat points per rebirth (preserving your original requested values)
+	setarray .@bstats[0], 300, 600, 900, 1200, 1500, 1800, 2100, 2400, 2700, 3000,
+	3300, 3600, 3900, 4200, 4500, 4800, 5100, 5400, 5700, 6000,
+	6300, 6600, 6900, 7200, 7500, 7800, 8100, 8400, 8700, 9000,
+	9300, 9600, 9900, 10200, 10500, 10800, 11100, 11400, 11700, 12000,
+	12300, 12600, 12900, 13200, 13500, 13800, 14100, 14400, 14700, 15000,
+	15300, 15600, 15900, 16200, 16500, 16800, 17100, 17400, 17700, 18000,
+	18300, 18600, 18900, 19200, 19500, 19800, 20100, 20400, 20700, 21000,
+	21300, 21600, 21900, 22200, 22500, 22800, 23100, 23400, 23700, 24000,
+	24300, 24600, 24900, 25200, 25500, 25800, 26100, 26400, 26700, 27000,
+	27300, 27600, 27900, 28200, 28500, 28800, 29100, 29400, 29700, 30000;
+
+	// ITEM REQUIREMENTS REMOVED: Cost is now entirely based on Zeny.
+
+	// cash points cost for rebirth 4-5
+	setarray .@cashpoint_cost[0], 0,0,0,500,1000;
+	.@use_cash_points = 0;
+
+	// The classes that are eligible for Rebirth
+	setarray .@allowed_classes[0],4008,4009,4010,4011,4012,4013,4015,4016,4017,4018,4019,4020,4021,4022,4023,4024,4025; // All Trans 2nd Jobs
+
+	// reset prices
+	setarray .@Reset[0], 5000, 5000, 9000, 15000;
+	
+	// --- Calculate Next Cost/Bonus ---
+	set .@required_zeny, 0;
+	set .@points_gained, 0;
+	set .@next_rebirth_lvl, Rebirth + 1;
+	set .@next_rebirth_index, Rebirth; // Rebirth is current level (0-99). Index is 0-99.
+	
+	if (Rebirth < .@max_rebirth) {
+		set .@required_zeny, .@zeny_costs[.@next_rebirth_index];
+		set .@points_gained, .@bstats[.@next_rebirth_index];
+	}
+
+
+	// === DIALOG ===
+	mes "[Codicia]";
+	mes "Hello "+strcharinfo(0)+". What do you want to do?";
+
+	if (Rebirth < .@max_rebirth) {
+		mes "To reach ^FF0000Rebirth "+.@next_rebirth_lvl+"^000000, you need Base Level "+.@blvl+" and a payment of ^FF0000"+.@required_zeny+" Zeny^000000. You will gain ^00AA00"+.@points_gained+"^000000 bonus stats.";
+	} else {
+		mes "You have already reached the maximum rebirth level of ^00AA00"+.@max_rebirth+"^000000.";
+	}
+	next;
+
+	switch(select("Rebirth:Reset Stats/Skills/SG Maps:Cancel")) {
+
+	// ===========================
+	// REBIRTH SYSTEM
+	// ===========================
+	case 1:
+
+		if (Rebirth >= .@max_rebirth) {
+			mes "[Codicia]";
+			mes "You already reached max rebirths.";
+			close;
+		}
+
+		if (BaseLevel < .@blvl) {
+			mes "[Codicia]";
+			mes "You need Base Level "+.@blvl+".";
+			close;
+		}
+		
+		// The calculated values are already in .@required_zeny and .@points_gained
+
+
+		// allowed class check
+		if (!callfunc("InArray", Class, .@allowed_classes, getarraysize(.@allowed_classes))) {
+			mes "[Codicia]";
+			mes "Your class "+Class+" cannot rebirth.";
+			close;
+		}
+
+		// Zeny check (using calculated cost)
+		if (Zeny < .@required_zeny) {
+			mes "[Codicia]";
+			mes "You need ^FF0000"+.@required_zeny+" Zeny^000000, but you only have ^FF0000"+Zeny+"^000000!";
+			close;
+		}
+
+		// ITEM CHECK REMOVED: Cost is Zeny only.
+
+		// cash point check
+		if (.@use_cash_points && Rebirth >= 3 && Rebirth <= 4) {
+			if (#CASHPOINTS < .@cashpoint_cost[Rebirth+1]) {
+				mes "[Codicia]";
+				mes "You need "+.@cashpoint_cost[Rebirth+1]+" Cash Points.";
+				close;
+			}
+		}
+
+		// --- Confirmation Message (Displaying dynamic cost and reward) ---
+		mes "[Codicia]";
+		mes "Are you sure you want to proceed with Rebirth ^FF0000"+.@next_rebirth_lvl+"^000000?";
+		mes "Cost: ^FF0000"+.@required_zeny+" Zeny^000000";
+		mes "Bonus Stats Gained: ^00AA00"+.@points_gained+" points^000000";
+		next;
+		
+		// 1. Display the menu
+		select("Yes, Rebirth me!:No, not yet.");
+		
+		// 2. Use the special internal variable '@menu' to retrieve the result
+		set .@rebirth_choice, @menu; 
+		
+		// 3. Check the variable
+		if (.@rebirth_choice == 2) close;
+
+		// apply cash point cost
+		if (.@use_cash_points && Rebirth >= 3 && Rebirth <= 4)
+			#CASHPOINTS -= .@cashpoint_cost[Rebirth+1];
+
+		// Deduct Zeny (using calculated cost)
+		Zeny -= .@required_zeny;
+
+		// ITEM DEDUCTION REMOVED: Cost is Zeny only.
+
+		jobchange 4001; // Change to Novice High (Rebirth Base Class)
+		resetlvl 1;
+		
+		// Grant Bonus Status Points
+		StatusPoint += .@points_gained;
+		Rebirth++;
+
+		mes "[Codicia]";
+		mes "Congratulations. You have rebirthed.";
+		mes "You are now Rebirth Level ^00AA00"+Rebirth+"^000000 and gained ^00AA00"+.@points_gained+"^000000 bonus stats!";
+		close;
+
+
+	// ===========================
+	// RESET MENU
+	// ===========================
+	case 2:
+
+		mes "[Codicia]";
+		mes "Reset options:";
+		mes "Skills: "+.@Reset[0]+"z";
+		mes "Stats: "+.@Reset[1]+"z";
+		mes "Both: "+.@Reset[2]+"z";
+		mes "SG Maps: "+.@Reset[3]+"z";
+		next;
+
+		// This section already correctly handles selection by assigning the result to .@sel
+		.@sel = select("Reset Skills:Reset Stats:Reset Both:Reset SG Maps:Cancel");
+		if (.@sel == 5) close;
+
+		if (Zeny < .@Reset[.@sel-1]) {
+			mes "Not enough Zeny.";
+			close;
+		}
+
+		Zeny -= .@Reset[.@sel-1];
+
+		if (.@sel == 1) resetskill;
+		if (.@sel == 2) resetstatus;
+		if (.@sel == 3) { resetskill; resetstatus; }
+
+		if (.@sel == 4) {
+			if (Class == Job_Star_Gladiator)
+				atcommand("@feelreset");
+			else
+				mes "Only Star Gladiator can reset maps.";
+		}
+
+		mes "Done.";
+		close;
+
+
+	case 3:
+		mes "[Codicia]";
+		mes "Come back anytime.";
+		close;
+	}
+}
+
+
+// ========================================
+//   FUNCTION: InArray(value, array)
+//   Hercules-friendly version
+// ========================================
+function	script	InArray	{
+    .@val = getarg(0);
+    .@size = getarg(2);
+
+    // iterate through array values
+    for (.@i = 0; .@i < .@size; .@i++) {
+        if (getelementofarray(getarg(1), .@i) == .@val)
+            return 1;
+    }
+
+    return 0;
+}
