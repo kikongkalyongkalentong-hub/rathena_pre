@@ -113,8 +113,6 @@ static const autoattack_pot_entry AUTOATTACK_POTS[] = {
 
 static const int AUTOATTACK_BB_MAX_MOBS = 5;
 
-static const int AUTOATTACK_TP_MAX_MOBS = 3;
-
 // =====================================================================================
 // === PRIVATE FUNCTION PROTOTYPES (Static to this file) ===
 // =====================================================================================
@@ -216,7 +214,7 @@ static bool autoattack_has_aspd_potion(struct map_session_data* sd)
  */
 static void autoattack_try_consumables(struct map_session_data* sd)
 {
-    // READ NPC VARIABLE: AA_USE_ASDP_ITEM
+    // READ NPC VARIABLE: AA_USE_ASPD_ITEM
     if (get_aa_var(sd, "AA_USE_ASPD_ITEM") == 0)
         return;
 
@@ -260,14 +258,13 @@ static void autoattack_try_autopots(struct map_session_data* sd)
 
     // --- HP LOGIC ---
     int hp_id  = get_aa_var(sd, "AA_HP_ITEM");
-    int hp_min = get_aa_var(sd, "AA_HP_MIN_THRESHOLD");
-    int hp_max = get_aa_var(sd, "AA_HP_MAX_THRESHOLD");
+    int hp_threshold = get_aa_var(sd, "AA_HP_THRESHOLD");
 
     static std::unordered_map<int, bool> is_healing_hp;
 
-    if (hp_id > 0 && hp_min > 0) {
-        if (cur_hp <= hp_min) is_healing_hp[sd->bl.id] = true;
-        else if (cur_hp >= hp_max) is_healing_hp[sd->bl.id] = false;
+    if (hp_id > 0 && hp_threshold > 0) {
+        if (cur_hp <= hp_threshold) is_healing_hp[sd->bl.id] = true;
+        else if (cur_hp > hp_threshold) is_healing_hp[sd->bl.id] = false;
 
         if (is_healing_hp[sd->bl.id]) {
             int idx = pc_search_inventory(sd, hp_id);
@@ -278,14 +275,13 @@ static void autoattack_try_autopots(struct map_session_data* sd)
 
     // --- SP LOGIC ---
     int sp_id  = get_aa_var(sd, "AA_SP_ITEM");
-    int sp_min = get_aa_var(sd, "AA_SP_MIN_THRESHOLD");
-    int sp_max = get_aa_var(sd, "AA_SP_MAX_THRESHOLD");
+    int sp_threshold = get_aa_var(sd, "AA_SP_THRESHOLD");
 
     static std::unordered_map<int, bool> is_healing_sp;
 
-    if (sp_id > 0 && sp_min > 0) {
-        if (cur_sp <= sp_min) is_healing_sp[sd->bl.id] = true;
-        else if (cur_sp >= sp_max) is_healing_sp[sd->bl.id] = false;
+    if (sp_id > 0 && sp_threshold > 0) {
+        if (cur_sp <= sp_threshold) is_healing_sp[sd->bl.id] = true;
+        else if (cur_sp > sp_threshold) is_healing_sp[sd->bl.id] = false;
 
         if (is_healing_sp[sd->bl.id]) {
             int idx = pc_search_inventory(sd, sp_id);
@@ -482,7 +478,7 @@ int autoattack_timer(int tid, t_tick tick, int id, intptr_t data)
                     unit_stop_attack(&sd->bl); 
                     pc_setsit(sd, 1);
                     clif_sitting(&sd->bl);
-                    clif_status_change(&sd->bl, SI_SIT, 1, 0, 0, 0, 0);
+                    clif_status_change(&sd->bl, 12, 1, 0, 0, 0, 0);
                     add_timer(gettick() + 1000, autoattack_timer, sd->bl.id, 0);
                     return 0; 
                 }
@@ -496,7 +492,7 @@ int autoattack_timer(int tid, t_tick tick, int id, intptr_t data)
                 if (healthy_hp && healthy_sp) {
                     pc_setsit(sd, 0);
                     clif_standing(&sd->bl);
-                    clif_status_change(&sd->bl, SI_SIT, 0, 0, 0, 0, 0);
+                    clif_status_change(&sd->bl, 12, 0, 0, 0, 0, 0);
                 } else {
                     add_timer(gettick() + 1000, autoattack_timer, sd->bl.id, 0);
                     return 0;

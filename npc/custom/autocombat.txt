@@ -25,11 +25,9 @@ OnCommand:
         set AA_TP_USE_FLY_WING, 1;
         set AA_TP_USE_JUMP, 0;
 		set AA_HP_ITEM, 0;
-		set AA_HP_MIN_THRESHOLD, 5;
-		set AA_HP_MAX_THRESHOLD, 90;
+		set AA_HP_THRESHOLD, 25;
 		set AA_SP_ITEM, 0;
-		set AA_SP_MIN_THRESHOLD, 5;
-		set AA_SP_MAX_THRESHOLD, 90;
+		set AA_SP_THRESHOLD, 5;
         set AA_USE_ASPD_ITEM, 1;
         set AA_REST_HP, 0;
         set AA_REST_SP, 0;
@@ -143,8 +141,7 @@ OnSelectHPRegeneration:
     switch (select(
         "~ Return" +
         ":~ Item to use - " + (AA_HP_ITEM > 0 ? getitemname(AA_HP_ITEM) : "Unset") +
-        ":~ Min HP % threshold - " + (AA_HP_MIN_THRESHOLD > 0 ? AA_HP_MIN_THRESHOLD : 5) + "%" +
-        ":~ Max HP % threshold - " + (AA_HP_MAX_THRESHOLD > 0 ? AA_HP_MAX_THRESHOLD : 100) + "%"
+        ":~ HP % threshold - " + (AA_HP_THRESHOLD > 0 ? AA_HP_THRESHOLD : 25) + "%"
     )) {
         case 2:
             mes "[Auto-Combat System]";
@@ -181,18 +178,10 @@ OnSelectHPRegeneration:
         case 3:
             mes "[Auto-Combat System]";
             mes "Choose the value of HP % to use the consumable (ex: 10 to use if the HP is below 10%)";
-            mes "Minimum value is 5. Maximum value is 90.";
+            mes "Minimum value is 5";
+            mes "Maximum value is 90.";
             input .@tmp, 5, 90;
-            set AA_HP_MIN_THRESHOLD, .@tmp;
-            close2;
-            goto OnSelectHPRegeneration;
-
-        case 4:
-            mes "[Auto-Combat System]";
-            mes "Choose the value of SP % to use the consumable (ex: 10 to use if the SP is below 10%)";
-            mes "Minimum value is 5. Maximum value is 90.";
-            input .@tmp, AA_HP_MIN_THRESHOLD, 100;
-            set AA_HP_MAX_THRESHOLD, .@tmp;
+            set AA_HP_THRESHOLD, .@tmp;
             close2;
             goto OnSelectHPRegeneration;
 
@@ -203,8 +192,7 @@ OnSelectSPRegeneration:
     switch (select(
         "~ Return" +
         ":~ Item to use - " + (AA_SP_ITEM > 0 ? getitemname(AA_SP_ITEM) : "Unset") +
-        ":~ Min SP % threshold - " + (AA_SP_MIN_THRESHOLD > 0 ? AA_SP_MIN_THRESHOLD : 5) + "%" +
-        ":~ Max SP % threshold - " + (AA_SP_MAX_THRESHOLD > 0 ? AA_SP_MAX_THRESHOLD : 100) + "%"
+        ":~ Min SP % threshold - " + (AA_SP_MIN_THRESHOLD > 0 ? AA_SP_MIN_THRESHOLD : 25) + "%"
     )) {
         case 2:
             mes "[Auto-Combat System]";
@@ -232,13 +220,12 @@ OnSelectSPRegeneration:
             goto OnSelectSPRegeneration;
 
         case 3:
-            mes "[SP Min]"; input .@tmp, 5, 90;
-            set AA_SP_MIN_THRESHOLD, .@tmp;
-            goto OnSelectSPRegeneration;
-
-        case 4:
-            mes "[SP Max]"; input .@tmp, AA_SP_MIN_THRESHOLD, 100;
-            set AA_SP_MAX_THRESHOLD, .@tmp;
+            mes "[Auto-Combat System]";
+            mes "Choose the value of SP % to use the consumable (ex: 10 to use if the SP is below 10%)";
+            mes "Minimum value is 5";
+            mes "Maximum value is 90.";
+            input .@tmp, 5, 90;
+            set AA_SP_THRESHOLD, .@tmp;
             goto OnSelectSPRegeneration;
 
         default: goto OnSelectRegeneration;
