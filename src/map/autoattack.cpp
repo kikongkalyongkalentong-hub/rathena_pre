@@ -217,7 +217,7 @@ static bool autoattack_has_aspd_potion(struct map_session_data* sd)
 static void autoattack_try_consumables(struct map_session_data* sd)
 {
     // READ NPC VARIABLE: AA_USE_ASDP_ITEM
-    if (get_aa_var(sd, "AA_USE_ASDP_ITEM") == 0)
+    if (get_aa_var(sd, "AA_USE_ASPD_ITEM") == 0)
         return;
 
     if (autoattack_has_aspd_potion(sd))
@@ -277,9 +277,9 @@ static void autoattack_try_autopots(struct map_session_data* sd)
     }
 
     // --- SP LOGIC ---
-    int sp_id  = get_aa_var(sd, "AA_SP_POT_ID");
-    int sp_min = get_aa_var(sd, "AA_SP_MIN");
-    int sp_max = get_aa_var(sd, "AA_SP_MAX");
+    int sp_id  = get_aa_var(sd, "AA_SP_ITEM");
+    int sp_min = get_aa_var(sd, "AA_SP_MIN_THRESHOLD");
+    int sp_max = get_aa_var(sd, "AA_SP_MAX_THRESHOLD");
 
     static std::unordered_map<int, bool> is_healing_sp;
 
@@ -458,6 +458,53 @@ int autoattack_timer(int tid, t_tick tick, int id, intptr_t data)
 
     if (sd->sc.option & OPTION_AUTOATTACK)
     {
+        // ---------------------------------------------------------
+        // [UPDATED] RESTING / SITTING LOGIC (Single Value Mode)
+        // ---------------------------------------------------------
+        // ---------------------------------------------------------
+        int sit_hp_trigger = get_aa_var(sd, "AA_REST_HP");
+        int sit_sp_trigger = get_aa_var(sd, "AA_REST_SP");
+
+        if (sit_hp_trigger > 0 || sit_sp_trigger > 0) {
+            auto pct = [](uint32 cur, uint32 max){
+                return max == 0 ? 100 : (int)((cur * 100ULL) / max);
+            };
+
+            int cur_hp = pct(sd->battle_status.hp, sd->battle_status.max_hp);
+            int cur_sp = pct(sd->battle_status.sp, sd->battle_status.max_sp);
+
+            // Logic: If standing, check if we need to SIT
+            if (!pc_issit(sd)) { 
+                bool low_hp = (sit_hp_trigger > 0 && cur_hp < sit_hp_trigger);
+                bool low_sp = (sit_sp_trigger > 0 && cur_sp < sit_sp_trigger);
+
+                if (low_hp || low_sp) {
+                    unit_stop_attack(&sd->bl); 
+                    pc_setsit(sd, 1);
+                    clif_sitting(&sd->bl);
+                    clif_status_change(&sd->bl, SI_SIT, 1, 0, 0, 0, 0);
+                    add_timer(gettick() + 1000, autoattack_timer, sd->bl.id, 0);
+                    return 0; 
+                }
+            } 
+            // Logic: If sitting, check if we can STAND
+            else { 
+                // Standing logic: trigger + 5% buffer to prevent sit/stand loops
+                bool healthy_hp = (sit_hp_trigger == 0 || cur_hp >= (sit_hp_trigger + 5));
+                bool healthy_sp = (sit_sp_trigger == 0 || cur_sp >= (sit_sp_trigger + 5));
+
+                if (healthy_hp && healthy_sp) {
+                    pc_setsit(sd, 0);
+                    clif_standing(&sd->bl);
+                    clif_status_change(&sd->bl, SI_SIT, 0, 0, 0, 0, 0);
+                } else {
+                    add_timer(gettick() + 1000, autoattack_timer, sd->bl.id, 0);
+                    return 0;
+                }
+            }
+        }
+        // ---------------------------------------------------------
+
         // 1. Support & Potion Variable Checking
         autoattack_rebuff(sd);
         autoattack_try_consumables(sd);
@@ -475,7 +522,7 @@ int autoattack_timer(int tid, t_tick tick, int id, intptr_t data)
             return 0;
         }
         
-        // Priority 2: Offensive Skills (Bowling Bash) - Now with Variable Checking
+        // Priority 2: Offensive Skills (Bowling Bash)
         autoattack_use_offensive_skill(sd, mob_count);
 
         // Priority 3: Normal Attack/Motion

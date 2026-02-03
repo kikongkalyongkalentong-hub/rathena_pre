@@ -30,7 +30,9 @@ OnCommand:
 		set AA_SP_ITEM, 0;
 		set AA_SP_MIN_THRESHOLD, 5;
 		set AA_SP_MAX_THRESHOLD, 90;
-        set AA_USE_ASDP_ITEM, 1;
+        set AA_USE_ASPD_ITEM, 1;
+        set AA_REST_HP, 0;
+        set AA_REST_SP, 0;
 		set AA_INIT, 1;
 	}
 	
@@ -84,7 +86,7 @@ OnSelectTeleport:
             mes "[Auto-Combat System]";
             mes "Adjust the maximum number of monster that can target you before being teleported.";
             mes "Minimum value is 1. Maximum value is 100. Set 0 to disable it.";
-            input .@in2, 1, 100;
+            input .@in2, 0, 100;
 			set AA_TP_MOBCOUNT, .@in2;
             close2;
             goto OnSelectTeleport;
@@ -106,13 +108,17 @@ OnSelectRegeneration:
     switch (select(
         "~ Return" +
         ":~ [" + (AA_HP_ITEM > 0 ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] HP Regeneration" + 
-        ":~ [" + (AA_SP_ITEM > 0 ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] SP Regeneration"
+        ":~ [" + (AA_SP_ITEM > 0 ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] SP Regeneration" +
+        ":~ [" + ((AA_REST_HP > 0 || AA_REST_SP > 0) ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] Sit to Rest"
     )) {
-        case 2: // Input HP %
+        case 2:
             goto OnSelectHPRegeneration;
 
-		case 3: // Input SP %
+		case 3:
 			goto OnSelectSPRegeneration;
+
+        case 4:
+            goto OnSelectResting;
 
         case 1:
         default:
@@ -122,10 +128,10 @@ OnSelectRegeneration:
 OnSelectBuffItems:
     switch (select(
         "~ Return" +
-        ":~ [" + (AA_USE_ASDP_ITEM ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] Use Attack Speed Potions"
+        ":~ [" + (AA_USE_ASPD_ITEM ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] Use Attack Speed Potions"
     )) {
         case 2:
-           set AA_USE_ASDP_ITEM, !AA_USE_ASDP_ITEM;
+           set AA_USE_ASPD_ITEM, !AA_USE_ASPD_ITEM;
            goto OnSelectBuffItems; 
 
         case 1:
@@ -234,6 +240,37 @@ OnSelectSPRegeneration:
             mes "[SP Max]"; input .@tmp, AA_SP_MIN_THRESHOLD, 100;
             set AA_SP_MAX_THRESHOLD, .@tmp;
             goto OnSelectSPRegeneration;
+
+        default: goto OnSelectRegeneration;
+    }
+
+OnSelectResting:
+    switch (select(
+        "~ Return" +
+        ":~ [ " + (AA_REST_HP > 0 ? "^50C878ON^000000" : "^FF0000OFF^000000") + " ] Sit if HP is less than " + (AA_REST_HP > 0 ? AA_REST_HP + "%" : "(Unset)") +
+        ":~ [ " + (AA_REST_SP > 0 ? "^50C878ON^000000" : "^FF0000OFF^000000") + " ] Sit if SP is less than " + (AA_REST_SP > 0 ? AA_REST_SP + "%" : "(Unset)")
+    )) {
+        case 2:
+            mes "[Auto-Combat System]";
+            mes "Choose the value of HP % to sit";
+            mes "Minimum value is 1";
+            mes "Maximum value is 99";
+            mes "0 to disable";
+            input .@sitHP, 0, 99;
+            set AA_REST_HP, .@sitHP;
+            close2;
+            goto OnSelectResting;
+
+        case 3:
+            mes "[Auto-Combat System]";
+            mes "Choose the value of SP % to sit";
+            mes "Minimum value is 1";
+            mes "Maximum value is 99";
+            mes "0 to disable";
+            input .@sitSP, 0, 99;
+            set AA_REST_SP, .@sitSP;
+            close2;
+            goto OnSelectResting;
 
         default: goto OnSelectRegeneration;
     }
