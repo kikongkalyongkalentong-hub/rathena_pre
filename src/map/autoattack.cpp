@@ -15,11 +15,62 @@
 #include "skill.hpp"  // For Skill IDs (WZ_ENERGYCOAT, etc.)
 #include "status.hpp" // For Status Change IDs (SC_AGIUP, SC_ADRENALINERUSH, etc.)
 #include "map.hpp"    // For general map/game constants
+#include "script.hpp"
+#include "../common/strlib.hpp"
+
+#define AA_DEBUG 1
 
 
 // =====================================================================================
 // === PRIVATE DATA (Static to this file) ===
 // =====================================================================================
+
+// Helper to read character variables from the script engine
+static int get_aa_var(struct map_session_data* sd, const char* var_name)
+{
+    if (!sd || !var_name)
+        return 0;
+
+    // add_str converts the variable name string into a unique ID (integer)
+    // pc_readglobalreg reads the value from the player's permanent variable storage
+    return pc_readglobalreg(sd, add_str(var_name));
+}
+
+static int buildin_autoattack_count_mobs(struct block_list *bl, va_list ap)
+{
+    int *count = va_arg(ap, int *);
+    (*count)++;
+    return 0;
+}
+
+static int autoattack_count_nearby_mobs(struct map_session_data* sd, int radius)
+{
+    int count = 0;
+    map_foreachinarea(
+        buildin_autoattack_count_mobs,
+        sd->bl.m,
+        sd->bl.x - radius, sd->bl.y - radius,
+        sd->bl.x + radius, sd->bl.y + radius,
+        BL_MOB,
+        &count
+    );
+    return count;
+}
+
+static void aa_debug(struct map_session_data* sd, const char* fmt, ...)
+{
+#if AA_DEBUG
+    if (!sd || sd->fd <= 0) return;
+
+    char buf[256];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+
+    clif_displaymessage(sd->fd, buf);
+#endif
+}
 
 // Global storage for per-player configurations
 static std::unordered_map<int, autoattack_config> autoattack_configs;
@@ -143,8 +194,8 @@ static bool autoattack_has_aspd_potion(struct map_session_data* sd)
  */
 static void autoattack_try_consumables(struct map_session_data* sd)
 {
-    auto& config = get_autoattack_config(sd);
-    if (!config.use_aspd_pots)
+    // READ NPC VARIABLE: AA_USE_ASDP_ITEM
+    if (get_aa_var(sd, "AA_USE_ASDP_ITEM") == 0)
         return;
 
     if (autoattack_has_aspd_potion(sd))
@@ -168,15 +219,19 @@ static void autoattack_try_consumables(struct map_session_data* sd)
 }
 
 /**
- * @brief Attempts to use HP/SP healing potions based on configured thresholds.
+ * @brief Attempts to use HP/SP healing potions based on NPC thresholds.
  */
 static void autoattack_try_autopots(struct map_session_data* sd)
 {
-    auto& config = get_autoattack_config(sd);
-    if (!config.use_heal_pots)
+    // 1. READ NPC VARIABLES
+    int hp_trigger = get_aa_var(sd, "AA_HP_THRESHOLD");
+    int sp_trigger = get_aa_var(sd, "AA_SP_THRESHOLD");
+
+    // If both are 0, the feature is disabled via NPC
+    if (hp_trigger == 0 && sp_trigger == 0)
         return;
 
-    // Prevent spamming by checking the global item cooldown (canuseitem tick)
+    // Global item cooldown check
     if (gettick() < sd->canskill_tick)
         return; 
 
@@ -194,35 +249,34 @@ static void autoattack_try_autopots(struct map_session_data* sd)
     bool used_potion = false;
 
     for (const auto& pot : pots) {
-        if (pot.item_id <= 0)
-            continue;
+        if (pot.item_id <= 0) continue;
 
         bool is_sp = pot.is_sp;
         int cur_pct = is_sp ? sp : hp;
-        
+        int current_trigger = is_sp ? sp_trigger : hp_trigger;
+
+        if (current_trigger == 0) continue; 
+
         auto& healing = is_sp ? sp_healing[sd->bl.id] : hp_healing[sd->bl.id];
 
-        // 1. Check if healing should start or stop
-        if (cur_pct <= pot.trigger_pct)
+        // Start healing if below NPC trigger, stop at 90%
+        if (cur_pct <= current_trigger)
             healing = true;
-        else if (cur_pct >= pot.target_pct)
+        else if (cur_pct >= 90) 
             healing = false;
 
-        if (!healing)
-            continue;
+        if (!healing) continue;
 
         int idx = pc_search_inventory(sd, pot.item_id);
-        if (idx < 0)
-            continue;
+        if (idx < 0) continue;
 
-        // Use the pot (pc_useitem applies the cooldown if successful)
         if (pc_useitem(sd, idx)) {
             used_potion = true;
-            break; // Stop and wait for the cooldown/next cycle
+            break; 
         }
     }
     
-    // Safety: If critically low but couldn't use a pot (e.g., ran out), reset state.
+    // Safety: Reset state if out of pots
     if (!used_potion && (hp < 10 || sp < 10)) {
          hp_healing[sd->bl.id] = false;
          sp_healing[sd->bl.id] = false;
@@ -235,185 +289,59 @@ static void autoattack_try_autopots(struct map_session_data* sd)
 
 static void autoattack_rebuff(struct map_session_data* sd)
 {
-    if (!sd)
-        return;
-
+    if (!sd) return;
     const t_tick now = gettick();
 
-    // ===================
-    // UNIVERSAL FAILSAFE
-    // ===================
-
-    // still casting a skill?
-    if (sd->ud.skilltimer > 0)
+    // FAILSAFES: Don't interrupt existing actions
+    if (sd->ud.skilltimer > 0 || sd->ud.attacktimer > 0 || 
+        sd->ud.canact_tick > now || sd->ud.canmove_tick > now)
         return;
 
-    // still attacking?
-    if (sd->ud.attacktimer > 0)
-        return;
-
-    // global skill delay?
-    if (sd->ud.canact_tick > now)
-        return;
-
-    // movement delay?
-    if (sd->ud.canmove_tick > now)
-        return;
-
-    // Now safe to cast buffs
     int skill_lv = 0;
-    t_tick offset = 0;
 
-    switch ((enum e_job)sd->status.class_) {
+    // Explicitly returning e_skill to keep the compiler happy
+    auto get_needed_buff = [&]() -> e_skill {
         
-        case JOB_SWORDMAN:
-        case JOB_KNIGHT:
-        case JOB_LORD_KNIGHT:
-        {
-            // Endure
-            skill_lv = pc_checkskill(sd, SM_ENDURE);
-            if (skill_lv > 0 && !sd->sc.data[SC_ENDURE]) {
-                skill_castend_nodamage_id(&sd->bl, &sd->bl, SM_ENDURE, skill_lv, now + offset, 0); offset += 50; 
-            }
-            bool is_two_hand_equipped = (sd->status.weapon == W_2HSWORD || sd->status.weapon == W_2HSPEAR);
-            // Two-Hand Quicken
-            skill_lv = pc_checkskill(sd, KN_TWOHANDQUICKEN);
-            if (skill_lv > 0 && !sd->sc.data[SC_TWOHANDQUICKEN] && is_two_hand_equipped) {
-                skill_castend_nodamage_id(&sd->bl, &sd->bl, KN_TWOHANDQUICKEN, skill_lv, now + offset, 0); offset += 50; 
-            }
-            // Parrying (LK)
-            skill_lv = pc_checkskill(sd, LK_PARRYING);
-            if (skill_lv > 0 && !sd->sc.data[SC_PARRYING] && is_two_hand_equipped) {
-                skill_castend_nodamage_id(&sd->bl, &sd->bl, LK_PARRYING, skill_lv, now + offset, 0); offset += 50; 
-            }
-            // Aura Blade (LK)
-            skill_lv = pc_checkskill(sd, LK_AURABLADE);
-            if (skill_lv > 0 && !sd->sc.data[SC_AURABLADE]) {
-                skill_castend_nodamage_id(&sd->bl, &sd->bl, LK_AURABLADE, skill_lv, now + offset, 0); offset += 50; 
-            }
-            // Concentration (LK)
-            skill_lv = pc_checkskill(sd, LK_CONCENTRATION);
-            if (skill_lv > 0 && !sd->sc.data[SC_CONCENTRATION]) {
-                skill_castend_nodamage_id(&sd->bl, &sd->bl, LK_CONCENTRATION, skill_lv, now + offset, 0); offset += 50; 
-            }
-            break;
-        }
-        
-        case JOB_MAGE:
-        case JOB_WIZARD:
-        case JOB_HIGH_WIZARD:
-        {
-            // Energy Coat
-            skill_lv = pc_checkskill(sd, EF_ENERGYCOAT);
-            if (skill_lv > 0 && !sd->sc.data[SC_ENERGYCOAT] && sd->battle_status.hp > sd->battle_status.max_hp / 10) {
-                skill_castend_nodamage_id(&sd->bl, &sd->bl, EF_ENERGYCOAT, skill_lv, now + offset, 0); offset += 50; 
-            }
-            break;
-        }
+        if ((skill_lv = pc_checkskill(sd, AL_BLESSING)) > 0 && !sd->sc.data[SC_BLESSING]) return (e_skill)AL_BLESSING;
+        if ((skill_lv = pc_checkskill(sd, AL_INCAGI)) > 0 && !sd->sc.data[SC_INCREASEAGI]) return (e_skill)AL_INCAGI;
 
-        case JOB_ACOLYTE:
-        case JOB_PRIEST:
-        case JOB_HIGH_PRIEST:
-        case JOB_MONK:
-        {
-            // Blessing
-            skill_lv = pc_checkskill(sd, AL_BLESSING);
-            if (skill_lv > 0 && !sd->sc.data[SC_BLESSING]) {
-                skill_castend_nodamage_id(&sd->bl, &sd->bl, AL_BLESSING, skill_lv, now + offset, 0); offset += 50; 
-            }
-            // Increase Agility
-            skill_lv = pc_checkskill(sd, AL_INCAGI);
-            if (skill_lv > 0 && !sd->sc.data[SC_INCREASEAGI]) {
-                skill_castend_nodamage_id(&sd->bl, &sd->bl, AL_INCAGI, skill_lv, now + offset, 0); offset += 50; 
-            }
-            break;
-        }
-        
-        case JOB_MERCHANT:
-        case JOB_BLACKSMITH:
-        case JOB_WHITESMITH:
-        {
-            // Adrenaline Rush
-            skill_lv = pc_checkskill(sd, BS_ADRENALINE);
-            if (skill_lv > 0 && !sd->sc.data[SC_ADRENALINE]) {
-                skill_castend_nodamage_id(&sd->bl, &sd->bl, BS_ADRENALINE, skill_lv, now + offset, 0); offset += 50; 
-            }
-            // Weapon Perfection
-            skill_lv = pc_checkskill(sd, BS_WEAPONPERFECT);
-            if (skill_lv > 0 && !sd->sc.data[SC_WEAPONPERFECTION]) {
-                skill_castend_nodamage_id(&sd->bl, &sd->bl, BS_WEAPONPERFECT, skill_lv, now + offset, 0); offset += 50; 
-            }
-            // Power Maximize (WS)
-            skill_lv = pc_checkskill(sd, BS_MAXIMIZE);
-            if (skill_lv > 0 && !sd->sc.data[SC_MAXIMIZEPOWER]) {
-                skill_castend_nodamage_id(&sd->bl, &sd->bl, BS_MAXIMIZE, skill_lv, now + offset, 0); offset += 50; 
-            }
-            break;
-        }
-
-        case JOB_THIEF:
-        case JOB_ASSASSIN:
-        case JOB_ASSASSIN_CROSS:
-        {
-            skill_lv = pc_checkskill(sd, ASC_EDP);
-
-            // Check if EDP is needed AND the status is NOT already active
-            if (skill_lv > 0 && !sd->sc.data[SC_EDP]) {
-                
-                // STEP 1: USE POISON BOTTLE (IF NOT USED ALREADY)
-                int idx = pc_search_inventory(sd, 7001); // Item ID for Poison Bottle
-                
-                // CRITICAL FIX: We must check for the current action status.
-                // If the player is already moving or attacking due to the item delay, skip this.
-                if (sd->ud.attacktimer > 0 || sd->ud.skilltimer > 0 || sd->ud.canact_tick > now) {
-                    break; // Skip item use if the player is busy
+        switch ((enum e_job)sd->status.class_) {
+            case JOB_LORD_KNIGHT:
+                if ((skill_lv = pc_checkskill(sd, LK_AURABLADE)) > 0 && !sd->sc.data[SC_AURABLADE]) return (e_skill)LK_AURABLADE;
+                if ((skill_lv = pc_checkskill(sd, LK_CONCENTRATION)) > 0 && !sd->sc.data[SC_CONCENTRATION]) return (e_skill)LK_CONCENTRATION;
+                // fallthrough
+            case JOB_KNIGHT:
+                if ((skill_lv = pc_checkskill(sd, KN_TWOHANDQUICKEN)) > 0 && !sd->sc.data[SC_TWOHANDQUICKEN]) {
+                    if (sd->status.weapon == W_2HSWORD || sd->status.weapon == W_2HSPEAR) return (e_skill)KN_TWOHANDQUICKEN;
                 }
-                
-                if (idx >= 0) {
-                    // This attempts to use the item, triggering its action delay.
-                    if (pc_useitem(sd, idx)) {
-                        // SUCCESS: Item was used. NOW WE MUST EXIT FOR THIS CYCLE.
-                        // The item use action/delay will block the rest of the rebuffs and skill casts.
-                        // We rely on the next rebuff loop (Cycle 2) to cast the skill.
-                        break; 
-                    }
-                }
-                
-                // STEP 2: CAST EDP (If we reached here, the item was not successfully used 
-                // in this cycle, but we try to cast the skill if it's the right moment).
+                break;
 
-                // Only cast the skill if the item was used in a previous cycle, or the timing is right.
-                // Since we don't have a specific flag, we just let the logic continue:
-                skill_castend_nodamage_id(&sd->bl, &sd->bl, ASC_EDP, skill_lv, now + offset, 0); 
-                offset += 50;
-            }
-            break;
+            case JOB_ASSASSIN_CROSS:
+                // This call now respects the skill_db requirements (Item: Poison Bottle + SP cost)
+                if ((skill_lv = pc_checkskill(sd, ASC_EDP)) > 0 && !sd->sc.data[SC_EDP]) return (e_skill)ASC_EDP;
+                break;
+
+            case JOB_SNIPER:
+                if ((skill_lv = pc_checkskill(sd, SN_SIGHT)) > 0 && !sd->sc.data[SC_TRUESIGHT]) return (e_skill)SN_SIGHT;
+                if ((skill_lv = pc_checkskill(sd, SN_WINDWALK)) > 0 && !sd->sc.data[SC_WINDWALK]) return (e_skill)SN_WINDWALK;
+                break;
+            
+            case JOB_WHITESMITH:
+                if ((skill_lv = pc_checkskill(sd, BS_ADRENALINE)) > 0 && !sd->sc.data[SC_ADRENALINE]) return (e_skill)BS_ADRENALINE;
+                if ((skill_lv = pc_checkskill(sd, BS_WEAPONPERFECT)) > 0 && !sd->sc.data[SC_WEAPONPERFECTION]) return (e_skill)BS_WEAPONPERFECT;
+                break;
+
+            default: break;
         }
-        
-        case JOB_ARCHER:
-        case JOB_HUNTER:
-        case JOB_SNIPER:
-        {
-            // Improve Concentration
-            skill_lv = pc_checkskill(sd, AC_CONCENTRATION);
-            if (skill_lv > 0 && !sd->sc.data[SC_CONCENTRATION]) {
-                skill_castend_nodamage_id(&sd->bl, &sd->bl, AC_CONCENTRATION, skill_lv, now + offset, 0); offset += 50; 
-            }
-            // True Sight (SN)
-            skill_lv = pc_checkskill(sd, SN_SIGHT);
-            if (skill_lv > 0 && !sd->sc.data[SC_TRUESIGHT]) {
-                skill_castend_nodamage_id(&sd->bl, &sd->bl, SN_SIGHT, skill_lv, now + offset, 0); offset += 50; 
-            }
-            // Wind Walk
-            skill_lv = pc_checkskill(sd, SN_WINDWALK);
-            if (skill_lv > 0 && !sd->sc.data[SC_WINDWALK]) {
-                skill_castend_nodamage_id(&sd->bl, &sd->bl, SN_WINDWALK, skill_lv, now + offset, 0); offset += 50; 
-            }
-            break;
-        }
-        
-        default:
-            break;
+        return (e_skill)0; 
+    };
+
+    e_skill skill_id = get_needed_buff();
+    
+    // Check if a skill was actually selected
+    if (skill_id != (e_skill)0) {
+        // MATCHING YOUR SIGNATURE: src, target_id, skill_id, skill_lv
+        unit_skilluse_id(&sd->bl, sd->bl.id, (uint16)skill_id, (uint16)skill_lv);
     }
 }
 
@@ -423,69 +351,41 @@ static void autoattack_rebuff(struct map_session_data* sd)
 
 static void autoattack_use_offensive_skill(struct map_session_data* sd, int mob_count)
 {
-    if (!sd)
+    if (!sd) return;
+
+    if (get_aa_var(sd, "AA_USE_SKILLS") == 0)
         return;
 
     t_tick now = gettick();
 
-    // ===================
-    // UNIVERSAL FAILSAFE
-    // ===================
-
-    // casting a skill?
-    // if (sd->ud.skilltimer > 0)
-    //     return;
-
-    // attack animation?
-    // if (sd->ud.attacktimer > 0)
-    //     return;
-
-    // global skill delay?
-    // if (sd->ud.canact_tick > now)
-    //     return;
-
-    // movement delay?
-    // if (sd->ud.canmove_tick > now)
-    //     return;
-
-    // skill cooldown (if used)
-    // if (sd->canskill_tick > now)
-    //     return;
-
-    // ===================
-    // OFFENSIVE LOGIC
-    // ===================
+    if (sd->ud.skilltimer > 0 || sd->ud.canact_tick > now || sd->canskill_tick > now)
+        return;
 
     int skill_lv = 0;
 
     switch ((enum e_job)sd->status.class_) {
-        
         case JOB_KNIGHT:
         case JOB_LORD_KNIGHT:
         {
-            // Use Bowling Bash if mob count is between 3 and 5 (as requested)
-            // if (mob_count >= 3 && mob_count <= AUTOATTACK_BB_MAX_MOBS)
-            // {
+            skill_lv = pc_checkskill(sd, KN_BOWLINGBASH);
+
+            if (mob_count >= 3 && mob_count <= AUTOATTACK_BB_MAX_MOBS)
+            {
                 if (skill_lv > 0)
                 {
-                    // *** Clear the skill/item cooldown flag ***
                     sd->canskill_tick = 0;
+                    
+                    // Try the 4-argument version: (src, x, y, skill_id)
+                    unit_skilluse_pos(&sd->bl, sd->bl.x, sd->bl.y, KN_BOWLINGBASH, skill_lv);
 
-                    // Use the positional skill function for AoE cast on self
-                    skill_castend_pos(sd->bl.x, sd->bl.y, KN_BOWLINGBASH, skill_lv);
-
-                    unit_stop_attack(&sd->bl); // Stop current action
-                    clif_displaymessage(sd->fd, "Auto-Skill: Using Bowling Bash!");
+                    unit_stop_attack(&sd->bl); 
+                    clif_displaymessage(sd->fd, "Auto-Skill: Bowling Bash!");
                     return; 
                 }
-            // }
+            }
             break;
         }
-        
-        // Add other classes here (e.g., Hunter AoE traps)
-
-        default:
-            break;
+        default: break;
     }
 }
 
@@ -523,82 +423,63 @@ static bool autoattack_motion(struct map_session_data* sd)
 }
 
 /**
- * @brief The main timer function that drives the auto-attack loop. (PUBLIC)
+ * @brief The main timer function.
  */
 int autoattack_timer(int tid, t_tick tick, int id, intptr_t data)
 {
-    struct map_session_data *sd=NULL;
-    static std::unordered_map<int,int> autoattack_notarget_ticks;
+    struct map_session_data *sd = map_id2sd(id);
+    static std::unordered_map<int, int> autoattack_notarget_ticks;
     
-    sd=map_id2sd(id);
-    if(sd==NULL) return 0;
+    if (sd == NULL) return 0;
     
-    // Safety check: Disable if player is dead
     if (pc_isdead(sd)) { 
         sd->sc.option &= ~OPTION_AUTOATTACK;
         autoattack_notarget_ticks.erase(id);
         clif_changeoption(&sd->bl);
         return 0;
     }
-    
-    if(sd->sc.option & OPTION_AUTOATTACK) // Check if the auto-attack flag is ON
+
+    if (sd->sc.option & OPTION_AUTOATTACK)
     {
-        // 1. Run support features (Buffs/Pots)
+        // 1. Support & Potion Variable Checking
         autoattack_rebuff(sd);
         autoattack_try_consumables(sd);
         autoattack_try_autopots(sd);
 
-        // 2. Check current mob count
-        auto& config = get_autoattack_config(sd);
-        int mob_count = autoattack_count_attackers(sd, AUTOATTACK_RADIUS);
+        int mob_count = autoattack_count_nearby_mobs(sd, AUTOATTACK_RADIUS);
 
-        // --- TEMPORARY PRIORITY LOGIC START (Normal Attack or Teleport) ---
+        int tp_threshold = get_aa_var(sd, "AA_TP_MOBCOUNT");
 
-        // PRIORITY 1: HIGH MOB COUNT (3+): Teleport Fail-Safe
-        // Uses the new threshold of 3.
-        if (mob_count >= AUTOATTACK_TP_MAX_MOBS) {
-            bool can_teleport = !(map_getmapflag(sd->bl.m, MF_NOTELEPORT));
-            
-            // Check if player is NOT currently casting a skill and can teleport
-            if (can_teleport && !pc_isdead(sd) && sd->canskill_tick < gettick())
-            {
-                pc_randomwarp(sd, CLR_TELEPORT);
-                clif_displaymessage(sd->fd, "Auto-Defense: Mob count (3+) detected. Teleporting.");
-
-                autoattack_notarget_ticks.erase(sd->bl.id);
-                // Reschedule and EXIT 
-                add_timer(gettick() + 2000, autoattack_timer, sd->bl.id, 0);
-                return 0; 
-            }
-        } 
+        if (tp_threshold > 0 && mob_count >= tp_threshold) {
+            pc_randomwarp(sd, CLR_TELEPORT);
+            clif_displaymessage(sd->fd, "Auto-Defense: Teleporting (Mob density too high).");
+            autoattack_notarget_ticks.erase(sd->bl.id);
+            add_timer(gettick() + 2000, autoattack_timer, sd->bl.id, 0);
+            return 0;
+        }
         
-        // PRIORITY 2: ALL REMAINING CASES (Mob Count 0-2): Normal Attack or Search
-        // Since we have no 'else if', if mob_count is 0, 1, or 2, we fall straight here.
-        {
-            // Try to find a target for normal attack, or continue movement/search
-            bool found = autoattack_motion(sd); 
-            
-            if (found)
-                autoattack_notarget_ticks.erase(sd->bl.id); // Target found, reset idle counter
-            else {
-                // Check idle cycles to trigger teleport if wandering too long
-                int &miss = autoattack_notarget_ticks[sd->bl.id];
-                int idle_cycles = config.idle_cycles_before_tp;
-                
-                if (++miss >= idle_cycles) {
-                    bool can_teleport = !(map_getmapflag(sd->bl.m, MF_NOTELEPORT));
-                    if (can_teleport && !pc_isdead(sd))
-                        pc_randomwarp(sd, CLR_TELEPORT);
-                    miss = 0; // Reset counter after teleport
-                }
+        // Priority 2: Offensive Skills (Bowling Bash) - Now with Variable Checking
+        autoattack_use_offensive_skill(sd, mob_count);
+
+        // Priority 3: Normal Attack/Motion
+        bool found = autoattack_motion(sd); 
+        
+        if (found) {
+            autoattack_notarget_ticks.erase(sd->bl.id);
+        } else {
+            int &miss = autoattack_notarget_ticks[sd->bl.id];
+            auto& config = get_autoattack_config(sd);
+            if (++miss >= config.idle_cycles_before_tp) {
+                if (!(map_getmapflag(sd->bl.m, MF_NOTELEPORT)))
+                    pc_randomwarp(sd, CLR_TELEPORT);
+                miss = 0;
             }
         }
-        // --- TEMPORARY PRIORITY LOGIC END ---
         
-        // Schedule next cycle
-        add_timer(gettick()+2000,autoattack_timer,sd->bl.id,0);
-    } else
-        autoattack_notarget_ticks.erase(id); // Feature is OFF
+        add_timer(gettick() + 2000, autoattack_timer, sd->bl.id, 0);
+    } else {
+        autoattack_notarget_ticks.erase(id);
+    }
     
     return 0;
 }

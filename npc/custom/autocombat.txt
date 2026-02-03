@@ -1,0 +1,109 @@
+//==============================================================
+// @autocombat configuration NPC (Optimized)
+//==============================================================
+-	script	autoattack_config	-1,{
+
+OnInit:
+	bindatcmd "autocombat", strnpcinfo(3)+"::OnCommand", 0, 99;
+	end;
+
+OnCommand:
+	// --- Initialize Defaults ---
+	if (!AA_INIT) {
+		set AA_USE_SKILLS, 1;
+		set AA_TP_MOBCOUNT, 3;
+		set AA_HP_THRESHOLD, 50;
+		set AA_SP_THRESHOLD, 30;
+        set AA_USE_ASDP_ITEM, 1;
+		set AA_INIT, 1;
+	}
+	
+	// Direct Menu Logic
+	switch (select(
+        "~ Exit" +
+        ":~ Attack Skills" +
+        ":~ Regeneration" +
+        ":~ Buff Items" +
+        ":~ Teleport"
+    )) {
+        case 2:
+			goto OnSelectAttackSkills;
+
+        case 3:
+            goto OnSelectRegeneration;
+
+        case 4:
+            goto OnSelectBuffItems;
+
+		case 5:
+			goto OnSelectTeleport;
+
+        case 1:
+		default:
+			close;
+	}
+
+OnSelectAttackSkills:
+    switch (select(
+        "~ Return" +
+        ":~ [" + ((AA_USE_SKILLS) ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] All Available Skills"
+    )) {
+        case 2: // Toggle Skills
+			set AA_USE_SKILLS, !AA_USE_SKILLS;
+			goto OnSelectAttackSkills;
+
+        case 1:
+        default:
+           goto OnCommand; 
+    }
+
+OnSelectTeleport:
+    switch (select(
+        "~ Return" +
+        ":~ [" + (AA_TP_MOBCOUNT ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] Teleport Mob Count" + (AA_TP_MOBCOUNT > 0 ? " - " + AA_TP_MOBCOUNT + " mobs" : "")
+    )) {
+        case 2:
+            input .@in2, 0, 100;
+			set AA_TP_MOBCOUNT, .@in2;
+            goto OnSelectTeleport;
+
+        case 1:
+        default:
+           goto OnCommand; 
+    }
+
+OnSelectRegeneration:
+    switch (select(
+        "~ Return" +
+        ":~ [" + (AA_HP_THRESHOLD > 0 ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] HP Potion" + (AA_HP_THRESHOLD > 0 ? " - " + AA_HP_THRESHOLD + "%" : "") + 
+        ":~ [" + (AA_SP_THRESHOLD > 0 ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] SP Potion" + (AA_SP_THRESHOLD > 0 ? " - " + AA_SP_THRESHOLD + "%" : "")
+    )) {
+        case 2: // Input HP %
+			input .@in3, 0, 99;
+			set AA_HP_THRESHOLD, .@in3;
+			goto OnSelectRegeneration;
+
+		case 3: // Input SP %
+			input .@in4, 0, 99;
+			set AA_SP_THRESHOLD, .@in4;
+			goto OnSelectRegeneration;
+
+        case 1:
+        default:
+           goto OnCommand; 
+    }
+
+OnSelectBuffItems:
+    switch (select(
+        "~ Return" +
+        ":~ [" + (AA_USE_ASDP_ITEM ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] Use Attack Speed Potions"
+    )) {
+        case 2:
+           set AA_USE_ASDP_ITEM, !AA_USE_ASDP_ITEM;
+           goto OnSelectBuffItems; 
+
+        case 1:
+        default:
+           goto OnCommand; 
+    }
+}
