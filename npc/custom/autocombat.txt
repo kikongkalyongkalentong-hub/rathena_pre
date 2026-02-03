@@ -12,6 +12,8 @@ OnCommand:
 	if (!AA_INIT) {
 		set AA_USE_SKILLS, 1;
 		set AA_TP_MOBCOUNT, 3;
+        set AA_TP_USE_FLY_WING, 1;
+        set AA_TP_USE_JUMP, 0;
 		set AA_HP_THRESHOLD, 50;
 		set AA_SP_THRESHOLD, 30;
         set AA_USE_ASDP_ITEM, 1;
@@ -60,11 +62,25 @@ OnSelectAttackSkills:
 OnSelectTeleport:
     switch (select(
         "~ Return" +
-        ":~ [" + (AA_TP_MOBCOUNT ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] Teleport Mob Count" + (AA_TP_MOBCOUNT > 0 ? " - " + AA_TP_MOBCOUNT + " mobs" : "")
+        ":~ [" + (AA_TP_MOBCOUNT ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] Teleport Mob Count" + (AA_TP_MOBCOUNT > 0 ? " - " + AA_TP_MOBCOUNT + " mobs" : "") +
+        ":~ [" + (AA_TP_USE_FLY_WING ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] Use Fly Wing" +
+        ":~ [" + (AA_TP_USE_JUMP ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] Use @jump"
     )) {
         case 2:
+            mes "[Auto-Combat System]";
+            mes "Adjust the maximum number of monster that can target you before being teleported.";
+            mes "Minimum value is 1. Set 0 to disable it.";
             input .@in2, 0, 100;
 			set AA_TP_MOBCOUNT, .@in2;
+            close2;
+            goto OnSelectTeleport;
+
+        case 3:
+			set AA_TP_USE_FLY_WING, !AA_TP_USE_FLY_WING;
+            goto OnSelectTeleport;
+
+        case 4:
+			set AA_TP_USE_JUMP, !AA_TP_USE_JUMP;
             goto OnSelectTeleport;
 
         case 1:
@@ -79,11 +95,18 @@ OnSelectRegeneration:
         ":~ [" + (AA_SP_THRESHOLD > 0 ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] SP Potion" + (AA_SP_THRESHOLD > 0 ? " - " + AA_SP_THRESHOLD + "%" : "")
     )) {
         case 2: // Input HP %
+            mes "[Auto-Combat System]";
+            mes "Choose the value of HP % to use this feature (ex. 10 to set if HP is below 10%).";
+            mes "Minimum value is 1. Maximum value is 100. Set 0 to disable it.";
 			input .@in3, 0, 99;
 			set AA_HP_THRESHOLD, .@in3;
+            close2;
 			goto OnSelectRegeneration;
 
 		case 3: // Input SP %
+            mes "[Auto-Combat System]";
+            mes "Choose the value of SP % to use this feature (ex. 10 to set if SP is below 10%).";
+            mes "Minimum value is 1. Maximum value is 100. Set 0 to disable it.";
 			input .@in4, 0, 99;
 			set AA_SP_THRESHOLD, .@in4;
 			goto OnSelectRegeneration;

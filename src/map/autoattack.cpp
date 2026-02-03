@@ -72,6 +72,28 @@ static void aa_debug(struct map_session_data* sd, const char* fmt, ...)
 #endif
 }
 
+static void autoattack_perform_teleport(struct map_session_data* sd) {
+    if (!sd) return;
+
+    // Read the NPC choice: 0 = Free (@jump), 1 = Fly Wing
+    int tp_use_flywing = get_aa_var(sd, "AA_TP_USE_FLY_WING");
+    int tp_use_jump = get_aa_var(sd, "AA_TP_USE_JUMP");
+
+    if (tp_use_flywing == 1) {
+        // Try to use a Fly Wing (Item ID: 601)
+        int idx = pc_search_inventory(sd, 601);
+        if (idx >= 0) {
+            pc_useitem(sd, idx);
+            return;
+        }
+    }
+
+    // Default / Type 0: Free Teleport
+    if (tp_use_jump == 1) {
+        pc_randomwarp(sd, CLR_TELEPORT);
+    }
+}
+
 // Global storage for per-player configurations
 static std::unordered_map<int, autoattack_config> autoattack_configs;
 
@@ -318,7 +340,12 @@ static void autoattack_rebuff(struct map_session_data* sd)
 
             case JOB_ASSASSIN_CROSS:
                 // This call now respects the skill_db requirements (Item: Poison Bottle + SP cost)
-                if ((skill_lv = pc_checkskill(sd, ASC_EDP)) > 0 && !sd->sc.data[SC_EDP]) return (e_skill)ASC_EDP;
+                if ((skill_lv = pc_checkskill(sd, ASC_EDP)) > 0 && !sd->sc.data[SC_EDP]) {
+                    int bottle_idx = pc_search_inventory(sd, 678);
+                    if (bottle_idx >= 0) {
+                        return (e_skill)ASC_EDP;
+                    }
+                }
                 break;
 
             case JOB_SNIPER:
@@ -451,10 +478,10 @@ int autoattack_timer(int tid, t_tick tick, int id, intptr_t data)
         int tp_threshold = get_aa_var(sd, "AA_TP_MOBCOUNT");
 
         if (tp_threshold > 0 && mob_count >= tp_threshold) {
-            pc_randomwarp(sd, CLR_TELEPORT);
+            autoattack_perform_teleport(sd);
             clif_displaymessage(sd->fd, "Auto-Defense: Teleporting (Mob density too high).");
             autoattack_notarget_ticks.erase(sd->bl.id);
-            add_timer(gettick() + 2000, autoattack_timer, sd->bl.id, 0);
+            add_timer(gettick() + 500, autoattack_timer, sd->bl.id, 0);
             return 0;
         }
         
@@ -471,12 +498,12 @@ int autoattack_timer(int tid, t_tick tick, int id, intptr_t data)
             auto& config = get_autoattack_config(sd);
             if (++miss >= config.idle_cycles_before_tp) {
                 if (!(map_getmapflag(sd->bl.m, MF_NOTELEPORT)))
-                    pc_randomwarp(sd, CLR_TELEPORT);
+                    autoattack_perform_teleport(sd);
                 miss = 0;
             }
         }
         
-        add_timer(gettick() + 2000, autoattack_timer, sd->bl.id, 0);
+        add_timer(gettick() + 500, autoattack_timer, sd->bl.id, 0);
     } else {
         autoattack_notarget_ticks.erase(id);
     }
