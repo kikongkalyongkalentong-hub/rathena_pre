@@ -5,6 +5,16 @@
 
 OnInit:
 	bindatcmd "autocombat", strnpcinfo(3)+"::OnCommand", 0, 99;
+
+    // --- CONFIGURE ALLOWED IDS HERE ---
+    // Standard HP Potions (Red, Orange, Yellow, White, Slims, Fish, etc.)
+    setarray .hp_ids[0], 575, 521, 512, 531, 577, 513, 532, 11519, 14522, 580, 529, 530, 515, 534, 573, 581, 574, 12704, 12234, 579, 12331, 12196, 520, 536, 663, 599, 598, 11501, 11500, 597, 522, 517, 12271, 519, 528, 11525, 586, 569, 502, 539, 516, 590, 535, 11517, 507, 501, 11522, 526, 567, 11706, 538, 509, 504, 11524, 11503, 549, 508, 503, 11523;
+    
+    // Standard SP Potions (Blue Herb, Blue Potion, Royal Jelly, Blue Slims)
+    setarray .sp_ids[0], 510, 505, 548, 596, 12332, 514, 533, 11505, 568, 11502, 11520, 11703, 14523, 12195, 11526, 11707, 578, 11504;
+    
+    // Dual Recovery (Yggdrasil Seed, Yggdrasil Berry) - These can show in BOTH
+    setarray .dual_ids[0], 607, 608, 11509, 591, 12322, 11512, 11510, 11511, 11507, 11506, 11709, 11712, 11708, 12709, 518, 593, 592, 11508, 12233, 595, 582, 11521, 576, 12192, 587, 11711, 11710, 12197, 594, 14524, 607, 608;
 	end;
 
 OnCommand:
@@ -14,8 +24,12 @@ OnCommand:
 		set AA_TP_MOBCOUNT, 3;
         set AA_TP_USE_FLY_WING, 1;
         set AA_TP_USE_JUMP, 0;
-		set AA_HP_THRESHOLD, 50;
-		set AA_SP_THRESHOLD, 30;
+		set AA_HP_ITEM, 0;
+		set AA_HP_MIN_THRESHOLD, 5;
+		set AA_HP_MAX_THRESHOLD, 90;
+		set AA_SP_ITEM, 0;
+		set AA_SP_MIN_THRESHOLD, 5;
+		set AA_SP_MAX_THRESHOLD, 90;
         set AA_USE_ASDP_ITEM, 1;
 		set AA_INIT, 1;
 	}
@@ -69,8 +83,8 @@ OnSelectTeleport:
         case 2:
             mes "[Auto-Combat System]";
             mes "Adjust the maximum number of monster that can target you before being teleported.";
-            mes "Minimum value is 1. Set 0 to disable it.";
-            input .@in2, 0, 100;
+            mes "Minimum value is 1. Maximum value is 100. Set 0 to disable it.";
+            input .@in2, 1, 100;
 			set AA_TP_MOBCOUNT, .@in2;
             close2;
             goto OnSelectTeleport;
@@ -91,25 +105,14 @@ OnSelectTeleport:
 OnSelectRegeneration:
     switch (select(
         "~ Return" +
-        ":~ [" + (AA_HP_THRESHOLD > 0 ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] HP Potion" + (AA_HP_THRESHOLD > 0 ? " - " + AA_HP_THRESHOLD + "%" : "") + 
-        ":~ [" + (AA_SP_THRESHOLD > 0 ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] SP Potion" + (AA_SP_THRESHOLD > 0 ? " - " + AA_SP_THRESHOLD + "%" : "")
+        ":~ [" + (AA_HP_ITEM > 0 ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] HP Regeneration" + 
+        ":~ [" + (AA_SP_ITEM > 0 ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] SP Regeneration"
     )) {
         case 2: // Input HP %
-            mes "[Auto-Combat System]";
-            mes "Choose the value of HP % to use this feature (ex. 10 to set if HP is below 10%).";
-            mes "Minimum value is 1. Maximum value is 100. Set 0 to disable it.";
-			input .@in3, 0, 99;
-			set AA_HP_THRESHOLD, .@in3;
-            close2;
-			goto OnSelectRegeneration;
+            goto OnSelectHPRegeneration;
 
 		case 3: // Input SP %
-            mes "[Auto-Combat System]";
-            mes "Choose the value of SP % to use this feature (ex. 10 to set if SP is below 10%).";
-            mes "Minimum value is 1. Maximum value is 100. Set 0 to disable it.";
-			input .@in4, 0, 99;
-			set AA_SP_THRESHOLD, .@in4;
-			goto OnSelectRegeneration;
+			goto OnSelectSPRegeneration;
 
         case 1:
         default:
@@ -128,5 +131,110 @@ OnSelectBuffItems:
         case 1:
         default:
            goto OnCommand; 
+    }
+
+OnSelectHPRegeneration:
+    switch (select(
+        "~ Return" +
+        ":~ Item to use - " + (AA_HP_ITEM > 0 ? getitemname(AA_HP_ITEM) : "Unset") +
+        ":~ Min HP % threshold - " + (AA_HP_MIN_THRESHOLD > 0 ? AA_HP_MIN_THRESHOLD : 5) + "%" +
+        ":~ Max HP % threshold - " + (AA_HP_MAX_THRESHOLD > 0 ? AA_HP_MAX_THRESHOLD : 100) + "%"
+    )) {
+        case 2:
+            mes "[Auto-Combat System]";
+            mes "Select HP item from your inventory:";
+            getinventorylist;
+            
+            // 1. Initialize menu with a Return option
+            set .@menu$, "~ Return:"; 
+            deletearray .@valid_ids[0], getarraysize(.@valid_ids);
+            set .@count, 0;
+
+            for (set .@i, 0; .@i < @inventorylist_count; set .@i, .@i + 1) {
+                set .@id, @inventorylist_id[.@i];
+
+                if (inarray(.hp_ids[0], .@id) != -1 || inarray(.dual_ids[0], .@id) != -1) {
+                    set .@menu$, .@menu$ + "~ " + getitemname(.@id) + " (" + @inventorylist_amount[.@i] + "):";
+                    set .@valid_ids[.@count], .@id;
+                    set .@count, .@count + 1;
+                }
+            }
+
+            // 2. Handle Selection
+            set .@selection, select(.@menu$);
+            if (.@selection == 1) {
+                close2;
+                goto OnSelectHPRegeneration;
+            }
+
+            // 3. Offset by 1 because the first menu item was Return
+            set AA_HP_ITEM, .@valid_ids[.@selection - 2];
+            close2;
+            goto OnSelectHPRegeneration;
+
+        case 3:
+            mes "[Auto-Combat System]";
+            mes "Choose the value of HP % to use the consumable (ex: 10 to use if the HP is below 10%)";
+            mes "Minimum value is 5. Maximum value is 90.";
+            input .@tmp, 5, 90;
+            set AA_HP_MIN_THRESHOLD, .@tmp;
+            close2;
+            goto OnSelectHPRegeneration;
+
+        case 4:
+            mes "[Auto-Combat System]";
+            mes "Choose the value of SP % to use the consumable (ex: 10 to use if the SP is below 10%)";
+            mes "Minimum value is 5. Maximum value is 90.";
+            input .@tmp, AA_HP_MIN_THRESHOLD, 100;
+            set AA_HP_MAX_THRESHOLD, .@tmp;
+            close2;
+            goto OnSelectHPRegeneration;
+
+        default: goto OnSelectRegeneration;
+    }
+
+OnSelectSPRegeneration:
+    switch (select(
+        "~ Return" +
+        ":~ Item to use - " + (AA_SP_ITEM > 0 ? getitemname(AA_SP_ITEM) : "Unset") +
+        ":~ Min SP % threshold - " + (AA_SP_MIN_THRESHOLD > 0 ? AA_SP_MIN_THRESHOLD : 5) + "%" +
+        ":~ Max SP % threshold - " + (AA_SP_MAX_THRESHOLD > 0 ? AA_SP_MAX_THRESHOLD : 100) + "%"
+    )) {
+        case 2:
+            mes "[Auto-Combat System]";
+            mes "Select SP item from your inventory:";
+            getinventorylist;
+            
+            set .@menu$, "~ Return:"; 
+            deletearray .@valid_ids[0], getarraysize(.@valid_ids);
+            set .@count, 0;
+
+            for (set .@i, 0; .@i < @inventorylist_count; set .@i, .@i + 1) {
+                set .@id, @inventorylist_id[.@i];
+
+                if (inarray(.sp_ids[0], .@id) != -1 || inarray(.dual_ids[0], .@id) != -1) {
+                    set .@menu$, .@menu$ + "~ " + getitemname(.@id) + " (" + @inventorylist_amount[.@i] + "):";
+                    set .@valid_ids[.@count], .@id;
+                    set .@count, .@count + 1;
+                }
+            }
+
+            set .@selection, select(.@menu$);
+            if (.@selection == 1) goto OnSelectSPRegeneration;
+
+            set AA_SP_ITEM, .@valid_ids[.@selection - 2];
+            goto OnSelectSPRegeneration;
+
+        case 3:
+            mes "[SP Min]"; input .@tmp, 5, 90;
+            set AA_SP_MIN_THRESHOLD, .@tmp;
+            goto OnSelectSPRegeneration;
+
+        case 4:
+            mes "[SP Max]"; input .@tmp, AA_SP_MIN_THRESHOLD, 100;
+            set AA_SP_MAX_THRESHOLD, .@tmp;
+            goto OnSelectSPRegeneration;
+
+        default: goto OnSelectRegeneration;
     }
 }

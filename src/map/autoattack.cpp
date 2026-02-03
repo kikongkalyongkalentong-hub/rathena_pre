@@ -245,63 +245,53 @@ static void autoattack_try_consumables(struct map_session_data* sd)
  */
 static void autoattack_try_autopots(struct map_session_data* sd)
 {
-    // 1. READ NPC VARIABLES
-    int hp_trigger = get_aa_var(sd, "AA_HP_THRESHOLD");
-    int sp_trigger = get_aa_var(sd, "AA_SP_THRESHOLD");
-
-    // If both are 0, the feature is disabled via NPC
-    if (hp_trigger == 0 && sp_trigger == 0)
-        return;
-
+    if (!sd) return;
+    
     // Global item cooldown check
     if (gettick() < sd->canskill_tick)
-        return; 
-
-    static std::unordered_map<int, bool> hp_healing;
-    static std::unordered_map<int, bool> sp_healing;
+        return;
 
     auto pct = [](uint32 cur, uint32 max){
         return max == 0 ? 100 : (int)((cur * 100ULL) / max);
     };
 
-    int hp = pct(sd->battle_status.hp, sd->battle_status.max_hp);
-    int sp = pct(sd->battle_status.sp, sd->battle_status.max_sp);
+    int cur_hp = pct(sd->battle_status.hp, sd->battle_status.max_hp);
+    int cur_sp = pct(sd->battle_status.sp, sd->battle_status.max_sp);
 
-    auto pots = get_heal_pot_configs(sd);
-    bool used_potion = false;
+    // --- HP LOGIC ---
+    int hp_id  = get_aa_var(sd, "AA_HP_ITEM");
+    int hp_min = get_aa_var(sd, "AA_HP_MIN_THRESHOLD");
+    int hp_max = get_aa_var(sd, "AA_HP_MAX_THRESHOLD");
 
-    for (const auto& pot : pots) {
-        if (pot.item_id <= 0) continue;
+    static std::unordered_map<int, bool> is_healing_hp;
 
-        bool is_sp = pot.is_sp;
-        int cur_pct = is_sp ? sp : hp;
-        int current_trigger = is_sp ? sp_trigger : hp_trigger;
+    if (hp_id > 0 && hp_min > 0) {
+        if (cur_hp <= hp_min) is_healing_hp[sd->bl.id] = true;
+        else if (cur_hp >= hp_max) is_healing_hp[sd->bl.id] = false;
 
-        if (current_trigger == 0) continue; 
-
-        auto& healing = is_sp ? sp_healing[sd->bl.id] : hp_healing[sd->bl.id];
-
-        // Start healing if below NPC trigger, stop at 90%
-        if (cur_pct <= current_trigger)
-            healing = true;
-        else if (cur_pct >= 90) 
-            healing = false;
-
-        if (!healing) continue;
-
-        int idx = pc_search_inventory(sd, pot.item_id);
-        if (idx < 0) continue;
-
-        if (pc_useitem(sd, idx)) {
-            used_potion = true;
-            break; 
+        if (is_healing_hp[sd->bl.id]) {
+            int idx = pc_search_inventory(sd, hp_id);
+            if (idx >= 0) pc_useitem(sd, idx);
+            else is_healing_hp[sd->bl.id] = false; // Out of pots
         }
     }
-    
-    // Safety: Reset state if out of pots
-    if (!used_potion && (hp < 10 || sp < 10)) {
-         hp_healing[sd->bl.id] = false;
-         sp_healing[sd->bl.id] = false;
+
+    // --- SP LOGIC ---
+    int sp_id  = get_aa_var(sd, "AA_SP_POT_ID");
+    int sp_min = get_aa_var(sd, "AA_SP_MIN");
+    int sp_max = get_aa_var(sd, "AA_SP_MAX");
+
+    static std::unordered_map<int, bool> is_healing_sp;
+
+    if (sp_id > 0 && sp_min > 0) {
+        if (cur_sp <= sp_min) is_healing_sp[sd->bl.id] = true;
+        else if (cur_sp >= sp_max) is_healing_sp[sd->bl.id] = false;
+
+        if (is_healing_sp[sd->bl.id]) {
+            int idx = pc_search_inventory(sd, sp_id);
+            if (idx >= 0) pc_useitem(sd, idx);
+            else is_healing_sp[sd->bl.id] = false; // Out of pots
+        }
     }
 }
 
