@@ -6,13 +6,13 @@
 OnInit:
 	bindatcmd "autocombat", strnpcinfo(3)+"::OnCommand", 0, 99;
 
-    // Standard HP Potions (Red, Orange, Yellow, White, Slims, Fish, etc.)
+    // Standard HP Potions
     setarray .hp_ids[0], 575, 521, 512, 531, 577, 513, 532, 11519, 14522, 580, 529, 530, 515, 534, 573, 581, 574, 12704, 12234, 579, 12331, 12196, 520, 536, 663, 599, 598, 11501, 11500, 597, 522, 517, 12271, 519, 528, 11525, 586, 569, 502, 539, 516, 590, 535, 11517, 507, 501, 11522, 526, 567, 11706, 538, 509, 504, 11524, 11503, 549, 508, 503, 11523;
     
-    // Standard SP Potions (Blue Herb, Blue Potion, Royal Jelly, Blue Slims)
+    // Standard SP Potions
     setarray .sp_ids[0], 510, 505, 548, 596, 12332, 514, 533, 11505, 568, 11502, 11520, 11703, 14523, 12195, 11526, 11707, 578, 11504;
     
-    // Dual Recovery (Yggdrasil Seed, Yggdrasil Berry) - These can show in BOTH
+    // Dual Recovery
     setarray .dual_ids[0], 607, 608, 11509, 591, 12322, 11512, 11510, 11511, 11507, 11506, 11709, 11712, 11708, 12709, 518, 593, 592, 11508, 12233, 595, 582, 11521, 576, 12192, 587, 11711, 11710, 12197, 594, 14524, 607, 608;
 
     // ASPD Potions
@@ -20,7 +20,6 @@ OnInit:
 	end;
 
 OnCommand:
-	// --- Initialize Defaults ---
 	if (!AA_INIT) {
 		set AA_USE_SKILLS, 1;
 		set AA_TP_MOBCOUNT, 3;
@@ -40,44 +39,141 @@ OnCommand:
 		set AA_INIT, 1;
 	}
 	
-	// Direct Menu Logic
-	switch (select(
-        "~ Exit" +
-        ":~ Attack Skills" +
-        ":~ Regeneration" +
-        ":~ Buff Items" +
-        ":~ Teleport"
-    )) {
-        case 2:
-			goto OnSelectAttackSkills;
-
-        case 3:
-            goto OnSelectRegeneration;
-
-        case 4:
-            goto OnSelectBuffItems;
-
-		case 5:
-			goto OnSelectTeleport;
-
-        case 1:
-		default:
-			close;
+	switch (select("~ Exit:~ Attack Skills:~ Regeneration:~ Buff Items:~ Teleport")) {
+        case 2: goto OnSelectAttackSkills;
+        case 3: goto OnSelectRegeneration;
+        case 4: goto OnSelectBuffItems;
+		case 5: goto OnSelectTeleport;
+        case 1: default: close;
 	}
 
 OnSelectAttackSkills:
-    switch (select(
-        "~ Return" +
-        ":~ [" + ((AA_USE_SKILLS) ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] All Available Skills"
-    )) {
-        case 2: // Toggle Skills
-			set AA_USE_SKILLS, !AA_USE_SKILLS;
-			goto OnSelectAttackSkills;
+    set .@on$, "^50C878ON^000000"; set .@off$, "^FF0000OFF^000000";
+    set .@menu$, "~ Return";
+    deletearray .@s_var$[0], getarraysize(.@s_var$);
+    set .@count, 0;
 
-        case 1:
-        default:
-           goto OnCommand; 
+    // --- SWORDMAN TREE ---
+    if (BaseClass == Job_Swordman) {
+        if (getskilllv(5) > 0)  { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_BASH ? .@on$ : .@off$) + "] Bash"; set .@s_var$[.@count], "AA_USE_SKILL_BASH"; set .@count, .@count + 1; }
+        if (getskilllv(7) > 0)  { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_MAGNUM_BREAK ? .@on$ : .@off$) + "] Magnum Break"; set .@s_var$[.@count], "AA_USE_SKILL_MAGNUM_BREAK"; set .@count, .@count + 1; }
+        if (getskilllv(62) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_BOWLING_BASH ? .@on$ : .@off$) + "] Bowling Bash"; set .@s_var$[.@count], "AA_USE_SKILL_BOWLING_BASH"; set .@count, .@count + 1; }
+        if (getskilllv(56) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_PIERCE ? .@on$ : .@off$) + "] Pierce"; set .@s_var$[.@count], "AA_USE_SKILL_PIERCE"; set .@count, .@count + 1; }
+        if (getskilllv(57) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_BRANDISH_SPEAR ? .@on$ : .@off$) + "] Brandish Spear"; set .@s_var$[.@count], "AA_USE_SKILL_BRANDISH_SPEAR"; set .@count, .@count + 1; }
+        if (getskilllv(58) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_SPEAR_STAB ? .@on$ : .@off$) + "] Spear Stab"; set .@s_var$[.@count], "AA_USE_SKILL_SPEAR_STAB"; set .@count, .@count + 1; }
+        if (getskilllv(59) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_SPEAR_BOOMERANG ? .@on$ : .@off$) + "] Spear Boomerang"; set .@s_var$[.@count], "AA_USE_SKILL_SPEAR_BOOMERANG"; set .@count, .@count + 1; }
+        if (getskilllv(254) > 0){ set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_GRAND_CROSS ? .@on$ : .@off$) + "] Grand Cross"; set .@s_var$[.@count], "AA_USE_SKILL_GRAND_CROSS"; set .@count, .@count + 1; }
+        if (getskilllv(250) > 0){ set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_SHIELD_CHARGE ? .@on$ : .@off$) + "] Shield Charge"; set .@s_var$[.@count], "AA_USE_SKILL_SHIELD_CHARGE"; set .@count, .@count + 1; }
+        if (getskilllv(251) > 0){ set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_SHIELD_BOOMERANG ? .@on$ : .@off$) + "] Shield Boomerang"; set .@s_var$[.@count], "AA_USE_SKILL_SHIELD_BOOMERANG"; set .@count, .@count + 1; }
+        if (getskilllv(253) > 0){ set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_HOLY_CROSS ? .@on$ : .@off$) + "] Holy Cross"; set .@s_var$[.@count], "AA_USE_SKILL_HOLY_CROSS"; set .@count, .@count + 1; }
+        if (getskilllv(367) > 0){ set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_PRESSURE ? .@on$ : .@off$) + "] Pressure"; set .@s_var$[.@count], "AA_USE_SKILL_PRESSURE"; set .@count, .@count + 1; }
+        if (getskilllv(480) > 0){ set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_SHIELD_CHAIN ? .@on$ : .@off$) + "] Shield Chain"; set .@s_var$[.@count], "AA_USE_SKILL_SHIELD_CHAIN"; set .@count, .@count + 1; }
     }
+
+    // --- MAGE TREE ---
+    if (BaseClass == Job_Mage) {
+        if (getskilllv(19) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_FIRE_BOLT ? .@on$ : .@off$) + "] Fire Bolt"; set .@s_var$[.@count], "AA_USE_SKILL_FIRE_BOLT"; set .@count, .@count + 1; }
+        if (getskilllv(14) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_COLD_BOLT ? .@on$ : .@off$) + "] Cold Bolt"; set .@s_var$[.@count], "AA_USE_SKILL_COLD_BOLT"; set .@count, .@count + 1; }
+        if (getskilllv(20) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_LIGHTNING_BOLT ? .@on$ : .@off$) + "] Lightning Bolt"; set .@s_var$[.@count], "AA_USE_SKILL_LIGHTNING_BOLT"; set .@count, .@count + 1; }
+        if (getskilllv(13) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_SOUL_STRIKE ? .@on$ : .@off$) + "] Soul Strike"; set .@s_var$[.@count], "AA_USE_SKILL_SOUL_STRIKE"; set .@count, .@count + 1; }
+        if (getskilllv(11) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_NAPALM_BEAT ? .@on$ : .@off$) + "] Napalm Beat"; set .@s_var$[.@count], "AA_USE_SKILL_NAPALM_BEAT"; set .@count, .@count + 1; }
+        if (getskilllv(17) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_FIRE_BALL ? .@on$ : .@off$) + "] Fire Ball"; set .@s_var$[.@count], "AA_USE_SKILL_FIRE_BALL"; set .@count, .@count + 1; }
+        if (getskilllv(21) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_THUNDER_STORM ? .@on$ : .@off$) + "] Thunder Storm"; set .@s_var$[.@count], "AA_USE_SKILL_THUNDER_STORM"; set .@count, .@count + 1; }
+        if (getskilllv(83) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_METEOR_STORM ? .@on$ : .@off$) + "] Meteor Storm"; set .@s_var$[.@count], "AA_USE_SKILL_METEOR_STORM"; set .@count, .@count + 1; }
+        if (getskilllv(84) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_JUPITEL_THUNDER ? .@on$ : .@off$) + "] Jupitel Thunder"; set .@s_var$[.@count], "AA_USE_SKILL_JUPITEL_THUNDER"; set .@count, .@count + 1; }
+        if (getskilllv(85) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_VERMILION ? .@on$ : .@off$) + "] Lord of Vermilion"; set .@s_var$[.@count], "AA_USE_SKILL_VERMILION"; set .@count, .@count + 1; }
+        if (getskilllv(86) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_WATER_BALL ? .@on$ : .@off$) + "] Water Ball"; set .@s_var$[.@count], "AA_USE_SKILL_WATER_BALL"; set .@count, .@count + 1; }
+        if (getskilllv(89) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_STORM_GUST ? .@on$ : .@off$) + "] Storm Gust"; set .@s_var$[.@count], "AA_USE_SKILL_STORM_GUST"; set .@count, .@count + 1; }
+        if (getskilllv(90) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_EARTH_SPIKE ? .@on$ : .@off$) + "] Earth Spike"; set .@s_var$[.@count], "AA_USE_SKILL_EARTH_SPIKE"; set .@count, .@count + 1; }
+        if (getskilllv(91) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_HEAVEN_DRIVE ? .@on$ : .@off$) + "] Heaven's Drive"; set .@s_var$[.@count], "AA_USE_SKILL_HEAVEN_DRIVE"; set .@count, .@count + 1; }
+        if (getskilllv(364) > 0){ set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_NAPALM_VULCAN ? .@on$ : .@off$) + "] Napalm Vulcan"; set .@s_var$[.@count], "AA_USE_SKILL_NAPALM_VULCAN"; set .@count, .@count + 1; }
+    }
+
+    // --- ACOLYTE TREE ---
+    if (BaseClass == Job_Acolyte) {
+        if (getskilllv(77) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_TURN_UNDEAD ? .@on$ : .@off$) + "] Turn Undead"; set .@s_var$[.@count], "AA_USE_SKILL_TURN_UNDEAD"; set .@count, .@count + 1; }
+        if (getskilllv(79) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_MAGNUS ? .@on$ : .@off$) + "] Magnus Exorcismus"; set .@s_var$[.@count], "AA_USE_SKILL_MAGNUS"; set .@count, .@count + 1; }
+        if (getskilllv(261) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_CALL_SPIRITS ? .@on$ : .@off$) + "] Auto-Call Spirits"; set .@s_var$[.@count], "AA_USE_SKILL_CALL_SPIRITS"; set .@count, .@count + 1; }
+    }
+
+    // --- MERCHANT TREE ---
+    if (BaseClass == Job_Merchant) {
+        if (getskilllv(42) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_MAMMONITE ? .@on$ : .@off$) + "] Mammonite"; set .@s_var$[.@count], "AA_USE_SKILL_MAMMONITE"; set .@count, .@count + 1; }
+        if (getskilllv(230) > 0){ set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_ACID_TERROR ? .@on$ : .@off$) + "] Acid Terror"; set .@s_var$[.@count], "AA_USE_SKILL_ACID_TERROR"; set .@count, .@count + 1; }
+        if (getskilllv(490) > 0){ set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_ACID_DEMO ? .@on$ : .@off$) + "] Acid Demonstration"; set .@s_var$[.@count], "AA_USE_SKILL_ACID_DEMO"; set .@count, .@count + 1; }
+    }
+
+    // --- ARCHER TREE ---
+    if (BaseClass == Job_Archer) {
+        if (getskilllv(46) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_DOUBLE_STRAFE ? .@on$ : .@off$) + "] Double Strafe"; set .@s_var$[.@count], "AA_USE_SKILL_DOUBLE_STRAFE"; set .@count, .@count + 1; }
+        if (getskilllv(47) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_ARROW_SHOWER ? .@on$ : .@off$) + "] Arrow Shower"; set .@s_var$[.@count], "AA_USE_SKILL_ARROW_SHOWER"; set .@count, .@count + 1; }
+        if (getskilllv(129) > 0){ set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_BLITZ_BEAT ? .@on$ : .@off$) + "] Blitz Beat"; set .@s_var$[.@count], "AA_USE_SKILL_BLITZ_BEAT"; set .@count, .@count + 1; }
+        if (getskilllv(381) > 0){ set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_FALCON_ASSAULT ? .@on$ : .@off$) + "] Falcon Assault"; set .@s_var$[.@count], "AA_USE_SKILL_FALCON_ASSAULT"; set .@count, .@count + 1; }
+        if (getskilllv(382) > 0){ set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_SHARP_SHOOTING ? .@on$ : .@off$) + "] Sharp Shooting"; set .@s_var$[.@count], "AA_USE_SKILL_SHARP_SHOOTING"; set .@count, .@count + 1; }
+        if (getskilllv(394) > 0){ set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_ARROW_VULCAN ? .@on$ : .@off$) + "] Arrow Vulcan"; set .@s_var$[.@count], "AA_USE_SKILL_ARROW_VULCAN"; set .@count, .@count + 1; }
+        if (Sex == 1 && getskilllv(316) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_MUSICAL_STRIKE ? .@on$ : .@off$) + "] Musical Strike"; set .@s_var$[.@count], "AA_USE_SKILL_MUSICAL_STRIKE"; set .@count, .@count + 1; }
+        if (Sex == 0 && getskilllv(324) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_THROW_ARROW ? .@on$ : .@off$) + "] Throw Arrow"; set .@s_var$[.@count], "AA_USE_SKILL_THROW_ARROW"; set .@count, .@count + 1; }
+    }
+
+    // --- THIEF TREE ---
+    if (BaseClass == Job_Thief) {
+        if (getskilllv(136) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_SONIC_BLOW ? .@on$ : .@off$) + "] Sonic Blow"; set .@s_var$[.@count], "AA_USE_SKILL_SONIC_BLOW"; set .@count, .@count + 1; }
+        if (getskilllv(379) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_SOUL_BREAKER ? .@on$ : .@off$) + "] Soul Breaker"; set .@s_var$[.@count], "AA_USE_SKILL_SOUL_BREAKER"; set .@count, .@count + 1; }
+        if (getskilllv(406) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_METEOR_ASSAULT ? .@on$ : .@off$) + "] Meteor Assault"; set .@s_var$[.@count], "AA_USE_SKILL_METEOR_ASSAULT"; set .@count, .@count + 1; }
+        if (getskilllv(46) > 0)  { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_DOUBLE_STRAFE ? .@on$ : .@off$) + "] Double Strafe"; set .@s_var$[.@count], "AA_USE_SKILL_DOUBLE_STRAFE"; set .@count, .@count + 1; }
+    }
+
+    // --- SUPER NOVICE ---
+    if (Class == Job_SuperNovice) {
+        if (getskilllv(5) > 0)  { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_BASH ? .@on$ : .@off$) + "] Bash"; set .@s_var$[.@count], "AA_USE_SKILL_BASH"; set .@count, .@count + 1; }
+        if (getskilllv(7) > 0)  { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_MAGNUM_BREAK ? .@on$ : .@off$) + "] Magnum Break"; set .@s_var$[.@count], "AA_USE_SKILL_MAGNUM_BREAK"; set .@count, .@count + 1; }
+        if (getskilllv(11) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_NAPALM_BEAT ? .@on$ : .@off$) + "] Napalm Beat"; set .@s_var$[.@count], "AA_USE_SKILL_NAPALM_BEAT"; set .@count, .@count + 1; }
+        if (getskilllv(13) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_SOUL_STRIKE ? .@on$ : .@off$) + "] Soul Strike"; set .@s_var$[.@count], "AA_USE_SKILL_SOUL_STRIKE"; set .@count, .@count + 1; }
+        if (getskilllv(14) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_COLD_BOLT ? .@on$ : .@off$) + "] Cold Bolt"; set .@s_var$[.@count], "AA_USE_SKILL_COLD_BOLT"; set .@count, .@count + 1; }
+        if (getskilllv(17) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_FIRE_BALL ? .@on$ : .@off$) + "] Fire Ball"; set .@s_var$[.@count], "AA_USE_SKILL_FIRE_BALL"; set .@count, .@count + 1; }
+        if (getskilllv(19) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_FIRE_BOLT ? .@on$ : .@off$) + "] Fire Bolt"; set .@s_var$[.@count], "AA_USE_SKILL_FIRE_BOLT"; set .@count, .@count + 1; }
+        if (getskilllv(20) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_LIGHTNING_BOLT ? .@on$ : .@off$) + "] Lightning Bolt"; set .@s_var$[.@count], "AA_USE_SKILL_LIGHTNING_BOLT"; set .@count, .@count + 1; }
+        if (getskilllv(21) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_THUNDER_STORM ? .@on$ : .@off$) + "] Thunder Storm"; set .@s_var$[.@count], "AA_USE_SKILL_THUNDER_STORM"; set .@count, .@count + 1; }
+        if (getskilllv(42) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_MAMMONITE ? .@on$ : .@off$) + "] Mammonite"; set .@s_var$[.@count], "AA_USE_SKILL_MAMMONITE"; set .@count, .@count + 1; }
+    }
+
+    // --- NINJA ---
+    if (Class == Job_Ninja) {
+        if (getskilllv(534) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_FIRE_BLOSSOM ? .@on$ : .@off$) + "] Crimson Fire Blossom"; set .@s_var$[.@count], "AA_USE_SKILL_FIRE_BLOSSOM"; set .@count, .@count + 1; }
+        if (getskilllv(536) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_DRAGON_FIRE ? .@on$ : .@off$) + "] Dragon Fire Formation"; set .@s_var$[.@count], "AA_USE_SKILL_DRAGON_FIRE"; set .@count, .@count + 1; }
+        if (getskilllv(537) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_SPEAR_ICE ? .@on$ : .@off$) + "] Lightning Spear of Ice"; set .@s_var$[.@count], "AA_USE_SKILL_SPEAR_ICE"; set .@count, .@count + 1; }
+        if (getskilllv(540) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_WIND_BLADE ? .@on$ : .@off$) + "] Wind Blade"; set .@s_var$[.@count], "AA_USE_SKILL_WIND_BLADE"; set .@count, .@count + 1; }
+        if (getskilllv(542) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_NORTH_WIND ? .@on$ : .@off$) + "] North Wind"; set .@s_var$[.@count], "AA_USE_SKILL_NORTH_WIND"; set .@count, .@count + 1; }
+        if (getskilllv(523) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_THROW_SHURIKEN ? .@on$ : .@off$) + "] Throw Shuriken"; set .@s_var$[.@count], "AA_USE_SKILL_THROW_SHURIKEN"; set .@count, .@count + 1; }
+        if (getskilllv(524) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_THROW_KUNAI ? .@on$ : .@off$) + "] Throw Kunai"; set .@s_var$[.@count], "AA_USE_SKILL_THROW_KUNAI"; set .@count, .@count + 1; }
+        if (getskilllv(525) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_THROW_HUUMA ? .@on$ : .@off$) + "] Throw Huuma Shuriken"; set .@s_var$[.@count], "AA_USE_SKILL_THROW_HUUMA"; set .@count, .@count + 1; }
+        if (getskilllv(526) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_THROW_ZENY ? .@on$ : .@off$) + "] Throw Zeny (Coins)"; set .@s_var$[.@count], "AA_USE_SKILL_THROW_ZENY"; set .@count, .@count + 1; }
+        if (getskilllv(528) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_MIST_SLASH ? .@on$ : .@off$) + "] Mist Slash"; set .@s_var$[.@count], "AA_USE_SKILL_MIST_SLASH"; set .@count, .@count + 1; }
+    }
+
+    // --- GUNSLINGER ---
+    if (Class == Job_Gunslinger) {
+        if (getskilllv(515) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_RAPID_SHOWER ? .@on$ : .@off$) + "] Rapid Shower"; set .@s_var$[.@count], "AA_USE_SKILL_RAPID_SHOWER"; set .@count, .@count + 1; }
+        if (getskilllv(512) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_TRACKING ? .@on$ : .@off$) + "] Tracking"; set .@s_var$[.@count], "AA_USE_SKILL_TRACKING"; set .@count, .@count + 1; }
+        if (getskilllv(514) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_PIERCING_SHOT ? .@on$ : .@off$) + "] Piercing Shot"; set .@s_var$[.@count], "AA_USE_SKILL_PIERCING_SHOT"; set .@count, .@count + 1; }
+        if (getskilllv(519) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_FULL_BUSTER ? .@on$ : .@off$) + "] Full Buster"; set .@s_var$[.@count], "AA_USE_SKILL_FULL_BUSTER"; set .@count, .@count + 1; }
+        if (getskilllv(518) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_DUST ? .@on$ : .@off$) + "] Dust"; set .@s_var$[.@count], "AA_USE_SKILL_DUST"; set .@count, .@count + 1; }
+        if (getskilllv(520) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_SPREAD_ATTACK ? .@on$ : .@off$) + "] Spread Attack"; set .@s_var$[.@count], "AA_USE_SKILL_SPREAD_ATTACK"; set .@count, .@count + 1; }
+        if (getskilllv(513) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_DISARM ? .@on$ : .@off$) + "] Disarm"; set .@s_var$[.@count], "AA_USE_SKILL_DISARM"; set .@count, .@count + 1; }
+    }
+
+    if (.@count == 0) {
+        mes "[Auto-Combat System]";
+        mes "No combat skills found for your current class.";
+        close;
+    }
+
+    set .@s, select(.@menu$);
+    if (.@s == 1) goto OnCommand;
+
+    set .@var_name$, .@s_var$[.@s - 2];
+    setd .@var_name$, !getd(.@var_name$);
+    goto OnSelectAttackSkills;
 
 OnSelectTeleport:
     switch (select(
@@ -320,11 +416,11 @@ OnSelectBattleManual:
     goto OnSelectBuffItems;
 
 OnSelectBubbleGum:
-    set AA_USE_BUBBLE_GUM, !AA_USE_BUBBLE;
+    set AA_USE_BUBBLE_GUM, !AA_USE_BUBBLE_GUM;
     goto OnSelectBuffItems;
 
 OnSelectAgilScroll:
-    set AA_USE_AGI_SCROLL, !AA_USE_AGI;
+    set AA_USE_AGI_SCROLL, !AA_USE_AGI_SCROLL;
     goto OnSelectBuffItems;
 
 OnSelectBlessScroll:
