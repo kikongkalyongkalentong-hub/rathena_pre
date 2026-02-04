@@ -214,27 +214,37 @@ static bool autoattack_has_aspd_potion(struct map_session_data* sd)
  */
 static void autoattack_try_consumables(struct map_session_data* sd)
 {
-    // READ NPC VARIABLE: AA_USE_ASPD_ITEM
-    if (get_aa_var(sd, "AA_USE_ASPD_ITEM") == 0)
-        return;
+    if (!sd) return;
 
-    if (autoattack_has_aspd_potion(sd))
-        return;
+    // --- 1. ASPD Potions ---
+    int aspd_id = get_aa_var(sd, "AA_ASPD_ITEM");
+    if (aspd_id > 0 && !autoattack_has_aspd_potion(sd)) {
+        int idx = pc_search_inventory(sd, aspd_id);
+        if (idx >= 0) pc_useitem(sd, idx);
+    }
 
-    auto pot_list = get_aspd_pot_list(sd);
-    if (pot_list.empty())
-        return;
+    // --- 2. Battle Manual ---
+    if (get_aa_var(sd, "AA_USE_BATTLE_MANUAL") > 0 && !sd->sc.data[SC_EXPBOOST]) {
+        int idx = pc_search_inventory(sd, 12263); 
+        if (idx >= 0) pc_useitem(sd, idx);
+    }
 
-    // Use the highest-tier available potion immediately
-    for (t_itemid item_id : pot_list) {
-        if (item_id <= 0)
-            continue;
-        
-        int idx = pc_search_inventory(sd, item_id);
-        if (idx >= 0) {
-            pc_useitem(sd, idx);
-            break; // Used one pot, we are done
-        }
+    // --- 3. Bubble Gum ---
+    if (get_aa_var(sd, "AA_USE_BUBBLE_GUM") > 0 && !sd->sc.data[SC_ITEMBOOST]) {
+        int idx = pc_search_inventory(sd, 12210);
+        if (idx >= 0) pc_useitem(sd, idx);
+    }
+
+    // --- 4. LV10 Agil Scroll ---
+    if (get_aa_var(sd, "AA_USE_AGI_SCROLL") > 0 && !sd->sc.data[SC_ITEMBOOST]) {
+        int idx = pc_search_inventory(sd, 12216);
+        if (idx >= 0) pc_useitem(sd, idx);
+    }
+
+    // --- 5. LV10 Blessing Scroll ---
+    if (get_aa_var(sd, "AA_USE_BLESS_SCROLL") > 0 && !sd->sc.data[SC_ITEMBOOST]) {
+        int idx = pc_search_inventory(sd, 12215);
+        if (idx >= 0) pc_useitem(sd, idx);
     }
 }
 
@@ -359,7 +369,7 @@ static void autoattack_rebuff(struct map_session_data* sd)
 }
 
 // =====================================================================================
-// === AUTO-OFFENSIVE SKILL LOGIC (LK: Bowling Bash) ===
+// === AUTO-OFFENSIVE SKILL LOGIC ===
 // =====================================================================================
 
 static void autoattack_use_offensive_skill(struct map_session_data* sd, int mob_count)

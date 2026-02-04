@@ -6,7 +6,6 @@
 OnInit:
 	bindatcmd "autocombat", strnpcinfo(3)+"::OnCommand", 0, 99;
 
-    // --- CONFIGURE ALLOWED IDS HERE ---
     // Standard HP Potions (Red, Orange, Yellow, White, Slims, Fish, etc.)
     setarray .hp_ids[0], 575, 521, 512, 531, 577, 513, 532, 11519, 14522, 580, 529, 530, 515, 534, 573, 581, 574, 12704, 12234, 579, 12331, 12196, 520, 536, 663, 599, 598, 11501, 11500, 597, 522, 517, 12271, 519, 528, 11525, 586, 569, 502, 539, 516, 590, 535, 11517, 507, 501, 11522, 526, 567, 11706, 538, 509, 504, 11524, 11503, 549, 508, 503, 11523;
     
@@ -15,6 +14,9 @@ OnInit:
     
     // Dual Recovery (Yggdrasil Seed, Yggdrasil Berry) - These can show in BOTH
     setarray .dual_ids[0], 607, 608, 11509, 591, 12322, 11512, 11510, 11511, 11507, 11506, 11709, 11712, 11708, 12709, 518, 593, 592, 11508, 12233, 595, 582, 11521, 576, 12192, 587, 11711, 11710, 12197, 594, 14524, 607, 608;
+
+    // ASPD Potions
+    setarray .aspd_ids[0], 645, 656, 657, 12241, 12242, 12243, 14509, 14510, 14511;
 	end;
 
 OnCommand:
@@ -28,9 +30,13 @@ OnCommand:
 		set AA_HP_THRESHOLD, 25;
 		set AA_SP_ITEM, 0;
 		set AA_SP_THRESHOLD, 5;
-        set AA_USE_ASPD_ITEM, 1;
+        set AA_ASPD_ITEM, 0;
         set AA_REST_HP, 0;
         set AA_REST_SP, 0;
+        set AA_USE_BATTLE_MANUAL, 0;
+        set AA_USE_BUBBLE_GUM, 0;
+        set AA_USE_AGI_SCROLL, 0;
+        set AA_USE_BLESS_SCROLL, 0;
 		set AA_INIT, 1;
 	}
 	
@@ -126,11 +132,26 @@ OnSelectRegeneration:
 OnSelectBuffItems:
     switch (select(
         "~ Return" +
-        ":~ [" + (AA_USE_ASPD_ITEM ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] Use Attack Speed Potions"
+        ":~ [" + (AA_ASPD_ITEM > 0 ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] ASPD Potion - " + (AA_ASPD_ITEM > 0 ? getitemname(AA_ASPD_ITEM) : "(Unset)") +
+        ":~ [" + (AA_USE_BATTLE_MANUAL ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] Battle Manual" +
+        ":~ [" + (AA_USE_BUBBLE_GUM ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] Bubble Gum" +
+        ":~ [" + (AA_USE_AGI_SCROLL ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] LV10 Agil Scroll" +
+        ":~ [" + (AA_USE_BLESS_SCROLL ? "^50C878ON^000000" : "^FF0000OFF^000000") + "] LV10 Blessing Scroll"
     )) {
         case 2:
-           set AA_USE_ASPD_ITEM, !AA_USE_ASPD_ITEM;
-           goto OnSelectBuffItems; 
+            goto OnSelectAspdPotion; 
+
+        case 3:
+            goto OnSelectBattleManual;
+
+        case 4:
+            goto OnSelectBubbleGum;
+
+        case 5:
+            goto OnSelectAgilScroll;
+
+        case 6:
+            goto OnSelectBlessScroll;
 
         case 1:
         default:
@@ -214,7 +235,10 @@ OnSelectSPRegeneration:
             }
 
             set .@selection, select(.@menu$);
-            if (.@selection == 1) goto OnSelectSPRegeneration;
+            if (.@selection == 1) {
+                close2;
+                goto OnSelectSPRegeneration;
+            }
 
             set AA_SP_ITEM, .@valid_ids[.@selection - 2];
             goto OnSelectSPRegeneration;
@@ -261,4 +285,49 @@ OnSelectResting:
 
         default: goto OnSelectRegeneration;
     }
+
+OnSelectAspdPotion:
+    mes "[Auto-Combat System]";
+    mes "Select ASPD item from your inventory:";
+    getinventorylist;
+    
+    set .@menu$, "~ Return:"; 
+    deletearray .@valid_ids[0], getarraysize(.@valid_ids);
+    set .@count, 0;
+
+    for (set .@i, 0; .@i < @inventorylist_count; set .@i, .@i + 1) {
+        set .@id, @inventorylist_id[.@i];
+
+        if (inarray(.aspd_ids[0], .@id) != -1) {
+            set .@menu$, .@menu$ + "~ " + getitemname(.@id) + " (" + @inventorylist_amount[.@i] + "):";
+            set .@valid_ids[.@count], .@id;
+            set .@count, .@count + 1;
+        }
+    }
+
+    set .@selection, select(.@menu$);
+    if (.@selection == 1) {
+        close2;
+        goto OnSelectBuffItems;
+    }
+
+    set AA_ASPD_ITEM, .@valid_ids[.@selection - 2];
+    close2;
+    goto OnSelectBuffItems;
+
+OnSelectBattleManual:
+    set AA_USE_BATTLE_MANUAL, !AA_USE_BATTLE_MANUAL;
+    goto OnSelectBuffItems;
+
+OnSelectBubbleGum:
+    set AA_USE_BUBBLE_GUM, !AA_USE_BUBBLE;
+    goto OnSelectBuffItems;
+
+OnSelectAgilScroll:
+    set AA_USE_AGI_SCROLL, !AA_USE_AGI;
+    goto OnSelectBuffItems;
+
+OnSelectBlessScroll:
+    set AA_USE_BLESS_SCROLL, !AA_USE_BLESS_SCROLL;
+    goto OnSelectBuffItems;
 }
