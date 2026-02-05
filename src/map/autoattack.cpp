@@ -372,809 +372,117 @@ static void autoattack_rebuff(struct map_session_data* sd)
 // === AUTO-OFFENSIVE SKILL LOGIC ===
 // =====================================================================================
 
+/**
+ * Helper function to handle repetitive skill checks
+ * Returns true if the skill was successfully cast
+ **/
+static bool aa_can_use(struct map_session_data* sd, int target_id, int skill_id, int delay, const char* var_name, int mob_count_req = 0, int current_mobs = 0) 
+{
+    // 1. Check if the toggle is ON in the NPC script
+    if (get_aa_var(sd, var_name) <= 0) return false;
+
+    // 2. Check if it's an AoE skill and if enough mobs are present
+    if (mob_count_req > 0 && current_mobs < mob_count_req) return false;
+
+    // 3. Check if the player actually has the skill learned
+    int skill_lv = pc_checkskill(sd, skill_id);
+    if (skill_lv <= 0) return false;
+
+    // 4. Check if the player has enough SP
+    if (sd->battle_status.sp < skill_get_sp(skill_id, skill_lv)) return false;
+
+    // 5. Cast the skill
+    unit_skilluse_id(&sd->bl, target_id, skill_id, skill_lv);
+    sd->canskill_tick = gettick() + delay;
+    return true;
+}
+
 static void autoattack_use_offensive_skill(struct map_session_data* sd, int mob_count)
 {
     if (!sd) return;
 
     t_tick now = gettick();
-
-    // Standard animation/cast timers
     if (sd->ud.skilltimer > 0 || sd->ud.canact_tick > now || sd->canskill_tick > now)
         return;
 
-    int skill_lv = 0;
-
-    int weapon_type = sd->status.weapon;
-    int shield_id = sd->status.shield;
+    int target_id = sd->ud.target;
+    int weapon = sd->status.weapon;
+    bool has_shield = (sd->status.shield > 0);
 
     switch ((enum e_job)sd->status.class_) {
-        case JOB_KNIGHT:
-        case JOB_LORD_KNIGHT:
-        case JOB_CRUSADER:
-        case JOB_PALADIN:
-        case JOB_SWORDMAN:
+        
+        case JOB_KNIGHT: case JOB_LORD_KNIGHT: case JOB_CRUSADER: case JOB_PALADIN: case JOB_SWORDMAN:
         {
-            bool has_spear = (weapon_type == W_1HSPEAR || weapon_type == W_2HSPEAR);
-            bool has_shield = (shield_id > 0);
-
-            // --- Pressure (ID: 367) ---
-            if (get_aa_var(sd, "AA_USE_SKILL_PRESSURE") > 0) {
-                skill_lv = pc_checkskill(sd, 367);
-                if (skill_lv > 0) {
-                    int target_id = sd->ud.target;
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(367, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 367, skill_lv);
-                        sd->canskill_tick = now + 800; return; 
-                    }
-                }
-            }
-
-            // --- Shield Chain (ID: 480) [Shield Req] ---
-            if (get_aa_var(sd, "AA_USE_SKILL_SHIELD_CHAIN") > 0 && has_shield) {
-                skill_lv = pc_checkskill(sd, 480);
-                if (skill_lv > 0) {
-                    int target_id = sd->ud.target;
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(480, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 480, skill_lv);
-                        sd->canskill_tick = now + 800; return; 
-                    }
-                }
-            }
-
-            // --- Grand Cross (ID: 254) [Multi-Mob Pattern] ---
-            if (get_aa_var(sd, "AA_USE_SKILL_GRAND_CROSS") > 0) {
-                skill_lv = pc_checkskill(sd, 254);
-                if (skill_lv > 0 && mob_count >= 2) {
-                    int target_id = sd->ud.target;
-                    if (!target_id) {
-                        map_foreachinarea(buildin_autoattack_sub, sd->bl.m, sd->bl.x - 2, sd->bl.y - 2, sd->bl.x + 2, sd->bl.y + 2, BL_MOB, &target_id);
-                    }
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(254, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 254, skill_lv);
-                        sd->canskill_tick = now + 1500; return; 
-                    }
-                }
-            }
-
-            // --- Shield Charge (ID: 250) [Shield Req] ---
-            if (get_aa_var(sd, "AA_USE_SKILL_SHIELD_CHARGE") > 0 && has_shield) {
-                skill_lv = pc_checkskill(sd, 250);
-                if (skill_lv > 0) {
-                    int target_id = sd->ud.target;
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(250, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 250, skill_lv);
-                        sd->canskill_tick = now + 800; return; 
-                    }
-                }
-            }
-
-            // --- Shield Boomerang (ID: 251) [Shield Req] ---
-            if (get_aa_var(sd, "AA_USE_SKILL_SHIELD_BOOMERANG") > 0 && has_shield) {
-                skill_lv = pc_checkskill(sd, 251);
-                if (skill_lv > 0) {
-                    int target_id = sd->ud.target;
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(251, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 251, skill_lv);
-                        sd->canskill_tick = now + 800; return; 
-                    }
-                }
-            }
-
-            // --- Holy Cross (ID: 253) ---
-            if (get_aa_var(sd, "AA_USE_SKILL_HOLY_CROSS") > 0) {
-                skill_lv = pc_checkskill(sd, 253);
-                if (skill_lv > 0) {
-                    int target_id = sd->ud.target;
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(253, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 253, skill_lv);
-                        sd->canskill_tick = now + 800; return; 
-                    }
-                }
-            }
-
-            // --- Bowling Bash (ID: 62) ---
-            if (get_aa_var(sd, "AA_USE_SKILL_BOWLING_BASH") > 0) {
-                skill_lv = pc_checkskill(sd, 62);
-                if (skill_lv > 0 && mob_count >= 2) {
-                    int target_id = sd->ud.target;
-                    if (!target_id) {
-                        map_foreachinarea(buildin_autoattack_sub, sd->bl.m, sd->bl.x - 2, sd->bl.y - 2, sd->bl.x + 2, sd->bl.y + 2, BL_MOB, &target_id);
-                    }
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(62, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 62, skill_lv);
-                        sd->canskill_tick = now + 1000; return; 
-                    }
-                }
-            }
-
-            // --- Brandish Spear (ID: 57) [Spear Only] ---
-            if (get_aa_var(sd, "AA_USE_SKILL_BRANDISH_SPEAR") > 0 && has_spear) {
-                skill_lv = pc_checkskill(sd, 57);
-                if (skill_lv > 0 && mob_count >= 2) {
-                    int target_id = sd->ud.target;
-                    if (!target_id) {
-                        map_foreachinarea(buildin_autoattack_sub, sd->bl.m, sd->bl.x - 2, sd->bl.y - 2, sd->bl.x + 2, sd->bl.y + 2, BL_MOB, &target_id);
-                    }
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(57, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 57, skill_lv);
-                        sd->canskill_tick = now + 1200; return; 
-                    }
-                }
-            }
-
-            // --- Spear Stab (ID: 58) [Spear Only] ---
-            if (get_aa_var(sd, "AA_USE_SKILL_SPEAR_STAB") > 0 && has_spear) {
-                skill_lv = pc_checkskill(sd, 58);
-                if (skill_lv > 0 && mob_count >= 2) {
-                    int target_id = sd->ud.target;
-                    if (!target_id) {
-                        map_foreachinarea(buildin_autoattack_sub, sd->bl.m, sd->bl.x - 2, sd->bl.y - 2, sd->bl.x + 2, sd->bl.y + 2, BL_MOB, &target_id);
-                    }
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(58, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 58, skill_lv);
-                        sd->canskill_tick = now + 1000; return; 
-                    }
-                }
-            }
-
-            // --- Magnum Break (ID: 7) ---
-            if (get_aa_var(sd, "AA_USE_SKILL_MAGNUM_BREAK") > 0) {
-                skill_lv = pc_checkskill(sd, 7);
-                if (skill_lv > 0 && mob_count >= 2) {
-                    int target_id = sd->ud.target;
-                    if (!target_id) {
-                        map_foreachinarea(buildin_autoattack_sub, sd->bl.m, sd->bl.x - 2, sd->bl.y - 2, sd->bl.x + 2, sd->bl.y + 2, BL_MOB, &target_id);
-                    }
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(7, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 7, skill_lv);
-                        sd->canskill_tick = now + 1000; return; 
-                    }
-                }
-            }
-
-            // --- Pierce (ID: 56) [Spear Only] ---
-            if (get_aa_var(sd, "AA_USE_SKILL_PIERCE") > 0 && has_spear) {
-                skill_lv = pc_checkskill(sd, 56);
-                if (skill_lv > 0) {
-                    int target_id = sd->ud.target;
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(56, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 56, skill_lv);
-                        sd->canskill_tick = now + 800; return; 
-                    }
-                }
-            }
-
-            // --- Spear Boomerang (ID: 59) [Spear Only] ---
-            if (get_aa_var(sd, "AA_USE_SKILL_SPEAR_BOOMERANG") > 0 && has_spear) {
-                skill_lv = pc_checkskill(sd, 59);
-                if (skill_lv > 0) {
-                    int target_id = sd->ud.target;
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(59, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 59, skill_lv);
-                        sd->canskill_tick = now + 800; return; 
-                    }
-                }
-            }
-
-            // --- Bash (ID: 5) ---
-            if (get_aa_var(sd, "AA_USE_SKILL_BASH") > 0) {
-                skill_lv = pc_checkskill(sd, 5);
-                if (skill_lv > 0) {
-                    int target_id = sd->ud.target;
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(5, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 5, skill_lv);
-                        sd->canskill_tick = now + 800; return; 
-                    }
-                }
-            }
+            bool has_spear = (weapon == W_1HSPEAR || weapon == W_2HSPEAR);
+            if (has_spear && aa_can_use(sd, target_id, 397, 1200, "AA_USE_SKILL_SPIRAL_PIERCE")) return;
+            if (aa_can_use(sd, target_id, 398, 800, "AA_USE_SKILL_HEAD_CRUSH")) return;
+            if (aa_can_use(sd, target_id, 399, 800, "AA_USE_SKILL_JOINT_BEAT")) return;
+            if (aa_can_use(sd, target_id, 367, 800, "AA_USE_SKILL_PRESSURE")) return;
+            if (has_shield && aa_can_use(sd, target_id, 480, 800, "AA_USE_SKILL_SHIELD_CHAIN")) return;
+            if (aa_can_use(sd, target_id, 254, 1500, "AA_USE_SKILL_GRAND_CROSS", 2, mob_count)) return;
+            if (has_shield && aa_can_use(sd, target_id, 250, 800, "AA_USE_SKILL_SHIELD_CHARGE")) return;
+            if (aa_can_use(sd, target_id, 62, 1000, "AA_USE_SKILL_BOWLING_BASH", 2, mob_count)) return;
+            if (has_spear && aa_can_use(sd, target_id, 56, 800, "AA_USE_SKILL_PIERCE")) return;
+            if (aa_can_use(sd, target_id, 5, 800, "AA_USE_SKILL_BASH")) return;
             break;
         }
-        
-        case JOB_ARCHER:
-        case JOB_HUNTER:
-        case JOB_SNIPER:
-        case JOB_BARD:
-        case JOB_CLOWN:
-        case JOB_DANCER:
-        case JOB_GYPSY:
+
+        case JOB_ARCHER: case JOB_HUNTER: case JOB_SNIPER: case JOB_BARD: case JOB_CLOWN: case JOB_DANCER: case JOB_GYPSY:
         {
-            bool has_bow = (weapon_type == W_BOW);
             bool has_falcon = (sd->sc.option & OPTION_FALCON);
-            bool has_instrument = (weapon_type == W_MUSICAL);
-            bool has_whip = (weapon_type == W_WHIP);
-
-            // --- Arrow Vulcan (ID: 394) [Instrument or Whip Req] ---
-            if (get_aa_var(sd, "AA_USE_SKILL_ARROW_VULCAN") > 0 && (has_instrument || has_whip)) {
-                skill_lv = pc_checkskill(sd, 394);
-                if (skill_lv > 0) {
-                    int target_id = sd->ud.target;
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(394, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 394, skill_lv);
-                        sd->canskill_tick = now + 1500; return; // Long animation delay
-                    }
-                }
-            }
-
-            // --- Musical Strike (ID: 316) [Instrument Req] ---
-            if (get_aa_var(sd, "AA_USE_SKILL_MUSICAL_STRIKE") > 0 && has_instrument) {
-                skill_lv = pc_checkskill(sd, 316);
-                if (skill_lv > 0) {
-                    int target_id = sd->ud.target;
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(316, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 316, skill_lv);
-                        sd->canskill_tick = now + 800; return; 
-                    }
-                }
-            }
-
-            // --- Throw Arrow (ID: 324) [Whip Req] ---
-            if (get_aa_var(sd, "AA_USE_SKILL_THROW_ARROW") > 0 && has_whip) {
-                skill_lv = pc_checkskill(sd, 324);
-                if (skill_lv > 0) {
-                    int target_id = sd->ud.target;
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(324, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 324, skill_lv);
-                        sd->canskill_tick = now + 800; return; 
-                    }
-                }
-            }
-
-            // --- Sharp Shooting (ID: 382) [Multi-Mob Pattern] ---
-            if (get_aa_var(sd, "AA_USE_SKILL_SHARP_SHOOTING") > 0 && has_bow) {
-                skill_lv = pc_checkskill(sd, 382);
-                if (skill_lv > 0 && mob_count >= 2) {
-                    int target_id = sd->ud.target;
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(382, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 382, skill_lv);
-                        sd->canskill_tick = now + 1200; return; // Longer delay for animation
-                    }
-                }
-            }
-
-            // --- Falcon Assault (ID: 381) [Falcon Req] ---
-            if (get_aa_var(sd, "AA_USE_SKILL_FALCON_ASSAULT") > 0 && has_falcon) {
-                skill_lv = pc_checkskill(sd, 381);
-                if (skill_lv > 0) {
-                    int target_id = sd->ud.target;
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(381, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 381, skill_lv);
-                        sd->canskill_tick = now + 1000; return; 
-                    }
-                }
-            }
-
-            // --- Blitz Beat (ID: 129) [Falcon Req] ---
-            if (get_aa_var(sd, "AA_USE_SKILL_BLITZ_BEAT") > 0 && has_falcon) {
-                skill_lv = pc_checkskill(sd, 129);
-                if (skill_lv > 0) {
-                    int target_id = sd->ud.target;
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(129, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 129, skill_lv);
-                        sd->canskill_tick = now + 800; return; 
-                    }
-                }
-            }
-
-            // --- Arrow Shower (ID: 47) [Multi-Mob Pattern] ---
-            if (get_aa_var(sd, "AA_USE_SKILL_ARROW_SHOWER") > 0 && has_bow) {
-                skill_lv = pc_checkskill(sd, 47);
-                if (skill_lv > 0 && mob_count >= 2) {
-                    int target_id = sd->ud.target;
-                    // Area logic: check for target or nearby mobs
-                    if (!target_id) {
-                        map_foreachinarea(buildin_autoattack_sub, sd->bl.m, sd->bl.x - 2, sd->bl.y - 2, sd->bl.x + 2, sd->bl.y + 2, BL_MOB, &target_id);
-                    }
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(47, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 47, skill_lv);
-                        sd->canskill_tick = now + 800; return; 
-                    }
-                }
-            }
-
-            // --- Double Strafe (ID: 46) ---
-            if (get_aa_var(sd, "AA_USE_SKILL_DOUBLE_STRAFE") > 0 && has_bow) {
-                skill_lv = pc_checkskill(sd, 46);
-                if (skill_lv > 0) {
-                    int target_id = sd->ud.target;
-                    if (target_id && sd->battle_status.sp >= skill_get_sp(46, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 46, skill_lv);
-                        sd->canskill_tick = now + 600; return; 
-                    }
-                }
-            }
-            break;
-        }
-        
-        case JOB_MERCHANT:
-        case JOB_BLACKSMITH:
-        case JOB_WHITESMITH:
-        case JOB_ALCHEMIST:
-        case JOB_CREATOR:
-        {
-            // --- Acid Demonstration (ID: 490) [Creator Only] ---
-            // Requires: 1 Acid Bottle AND 1 Bottle Grenade
-            if (get_aa_var(sd, "AA_USE_SKILL_ACID_DEMO") > 0) {
-                skill_lv = pc_checkskill(sd, 490);
-                if (skill_lv > 0) {
-                    // Check for reagents in inventory
-                    if (pc_search_inventory(sd, 7136) > 0 && pc_search_inventory(sd, 7135) > 0) {
-                        int target_id = sd->ud.target;
-                        if (target_id && sd->battle_status.sp >= skill_get_sp(490, skill_lv)) {
-                            unit_skilluse_id(&sd->bl, target_id, 490, skill_lv);
-                            sd->canskill_tick = now + 1200; return; 
-                        }
-                    }
-                }
-            }
-
-            // --- Acid Terror (ID: 230) ---
-            // Requires: 1 Acid Bottle
-            if (get_aa_var(sd, "AA_USE_SKILL_ACID_TERROR") > 0) {
-                skill_lv = pc_checkskill(sd, 230);
-                if (skill_lv > 0) {
-                    if (pc_search_inventory(sd, 7136) > 0) {
-                        int target_id = sd->ud.target;
-                        if (target_id && sd->battle_status.sp >= skill_get_sp(230, skill_lv)) {
-                            unit_skilluse_id(&sd->bl, target_id, 230, skill_lv);
-                            sd->canskill_tick = now + 1000; return; 
-                        }
-                    }
-                }
-            }
-
-            // --- Mammonite (ID: 42) ---
-            if (get_aa_var(sd, "AA_USE_SKILL_MAMMONITE") > 0) {
-                skill_lv = pc_checkskill(sd, 42);
-                // Check skill level, SP, and Zeny (Mammonite costs 100z * Level)
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(42, skill_lv) && sd->status.zeny >= (100 * skill_lv)) {
-                    int target_id = sd->ud.target;
-                    if (target_id) {
-                        unit_skilluse_id(&sd->bl, target_id, 42, skill_lv);
-                        sd->canskill_tick = now + 600; return; 
-                    }
-                }
-            }
+            if ((weapon == W_MUSICAL || weapon == W_WHIP) && aa_can_use(sd, target_id, 394, 1500, "AA_USE_SKILL_ARROW_VULCAN")) return;
+            if (has_falcon && aa_can_use(sd, target_id, 381, 1000, "AA_USE_SKILL_FALCON_ASSAULT")) return;
+            if (weapon == W_BOW && aa_can_use(sd, target_id, 382, 1200, "AA_USE_SKILL_SHARP_SHOOTING", 2, mob_count)) return;
+            if (weapon == W_BOW && aa_can_use(sd, target_id, 46, 600, "AA_USE_SKILL_DOUBLE_STRAFE")) return;
             break;
         }
 
-        case JOB_MAGE:
-        case JOB_WIZARD:
-        case JOB_HIGH_WIZARD:
-        case JOB_SAGE:
-        case JOB_PROFESSOR:
+        case JOB_MAGE: case JOB_WIZARD: case JOB_HIGH_WIZARD: case JOB_SAGE: case JOB_PROFESSOR:
         {
-            int target_id = sd->ud.target;
-
-            // --- The "Big Three" AoE (IDs: 89, 83, 85) ---
-            int aoe_skills[] = { 89, 83, 85 }; // Storm Gust, Meteor Storm, LoV
-            const char* aoe_vars[] = { "AA_USE_SKILL_STORM_GUST", "AA_USE_SKILL_METEOR_STORM", "AA_USE_SKILL_VERMILION" };
+            // AoE Big Three
+            if (aa_can_use(sd, target_id, 89, 1500, "AA_USE_SKILL_STORM_GUST", 2, mob_count)) return;
+            if (aa_can_use(sd, target_id, 83, 1500, "AA_USE_SKILL_METEOR_STORM", 2, mob_count)) return;
+            if (aa_can_use(sd, target_id, 85, 1500, "AA_USE_SKILL_VERMILION", 2, mob_count)) return;
             
-            if (mob_count >= 2) {
-                for (int i = 0; i < 3; i++) {
-                    if (get_aa_var(sd, aoe_vars[i]) > 0) {
-                        skill_lv = pc_checkskill(sd, aoe_skills[i]);
-                        if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(aoe_skills[i], skill_lv)) {
-                            unit_skilluse_id(&sd->bl, target_id, aoe_skills[i], skill_lv);
-                            sd->canskill_tick = now + 1500; return; 
-                        }
-                    }
-                }
-            }
-
-            // --- Heaven's Drive (ID: 91) [AoE Pattern] ---
-            if (get_aa_var(sd, "AA_USE_SKILL_HEAVEN_DRIVE") > 0 && mob_count >= 2) {
-                skill_lv = pc_checkskill(sd, 91);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(91, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 91, skill_lv);
-                    sd->canskill_tick = now + 1000; return;
-                }
-            }
-
-            // --- Jupitel Thunder (ID: 84) ---
-            if (get_aa_var(sd, "AA_USE_SKILL_JUPITEL_THUNDER") > 0) {
-                skill_lv = pc_checkskill(sd, 84);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(84, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 84, skill_lv);
-                    sd->canskill_tick = now + 800; return; 
-                }
-            }
-
-            // --- Spike (ID: 90) ---
-            if (get_aa_var(sd, "AA_USE_SKILL_EARTH_SPIKE") > 0) {
-                skill_lv = pc_checkskill(sd, 90);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(90, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 90, skill_lv);
-                    sd->canskill_tick = now + 1000; return;
-                }
-            }
-
-            // --- Water Ball (ID: 86) [Water Cell Check] ---
-            if (get_aa_var(sd, "AA_USE_SKILL_WATER_BALL") > 0) {
-                // Check if player is standing on water
-                if (map_getcell(sd->bl.m, sd->bl.x, sd->bl.y, CELL_CHKWATER)) {
-                    skill_lv = pc_checkskill(sd, 86);
-                    if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(86, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 86, skill_lv);
-                        sd->canskill_tick = now + 1200; return;
-                    }
-                }
-            }
-
-            // --- Thunder Storm (ID: 21) [AoE Pattern] ---
-            if (get_aa_var(sd, "AA_USE_SKILL_THUNDER_STORM") > 0 && mob_count >= 2) {
-                skill_lv = pc_checkskill(sd, 21);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(21, skill_lv)) {
-                    if (target_id) {
-                        unit_skilluse_id(&sd->bl, target_id, 21, skill_lv);
-                        sd->canskill_tick = now + 1200; return;
-                    }
-                }
-            }
-
-            // --- Fire Ball (ID: 17) [AoE Pattern] ---
-            if (get_aa_var(sd, "AA_USE_SKILL_FIRE_BALL") > 0 && mob_count >= 2) {
-                skill_lv = pc_checkskill(sd, 17);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(17, skill_lv)) {
-                    if (target_id) {
-                        unit_skilluse_id(&sd->bl, target_id, 17, skill_lv);
-                        sd->canskill_tick = now + 800; return;
-                    }
-                }
-            }
-
-            // --- Bolts & Single Target (Fire, Cold, Lightning, Soul, Napalm) ---
-            // We check them in order of priority. 
-            // Note: If multiple are ON, the first one found in the code will be cast.
-            
-            int mage_skills[] = { 19, 14, 20, 13, 11 }; // Fire Bolt, Cold Bolt, Lightning Bolt, Soul Strike, Napalm Beat
-            const char* mage_vars[] = { "AA_USE_SKILL_FIRE_BOLT", "AA_USE_SKILL_COLD_BOLT", "AA_USE_SKILL_LIGHTNING_BOLT", "AA_USE_SKILL_SOUL_STRIKE", "AA_USE_SKILL_NAPALM_BEAT" };
-
-            for (int i = 0; i < 5; i++) {
-                if (get_aa_var(sd, mage_vars[i]) > 0) {
-                    skill_lv = pc_checkskill(sd, mage_skills[i]);
-                    if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(mage_skills[i], skill_lv)) {
-                        if (target_id) {
-                            unit_skilluse_id(&sd->bl, target_id, mage_skills[i], skill_lv);
-                            sd->canskill_tick = now + 1000; return;
-                        }
-                    }
-                }
-            }
+            // Standard Bolts
+            if (aa_can_use(sd, target_id, 19, 1000, "AA_USE_SKILL_FIRE_BOLT")) return;
+            if (aa_can_use(sd, target_id, 14, 1000, "AA_USE_SKILL_COLD_BOLT")) return;
+            if (aa_can_use(sd, target_id, 20, 1000, "AA_USE_SKILL_LIGHTNING_BOLT")) return;
             break;
         }
 
-        case JOB_PRIEST:
-        case JOB_HIGH_PRIEST:
-        case JOB_MONK:
-        case JOB_CHAMPION:
+        case JOB_ASSASSIN: case JOB_ASSASSIN_CROSS: case JOB_ROGUE: case JOB_STALKER:
         {
-            int target_id = sd->ud.target;
-            if (!target_id) break;
-
-            // Magnus Exorcismus (Requires Blue Gemstone check if your server enforces it)
-            if (get_aa_var(sd, "AA_USE_SKILL_MAGNUS") > 0 && mob_count >= 2) {
-                skill_lv = pc_checkskill(sd, 79);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(79, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 79, skill_lv);
-                    sd->canskill_tick = now + 1500; return;
-                }
-            }
-
-            // Turn Undead (Only if target is Undead element)
-            if (get_aa_var(sd, "AA_USE_SKILL_TURN_UNDEAD") > 0) {
-                struct block_list* target_bl = map_id2bl(target_id);
-                // Check if target exists and if its element is Undead (6)
-                if (target_bl && status_get_element(target_bl) == ELE_UNDEAD) {
-                    skill_lv = pc_checkskill(sd, 77);
-                    if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(77, skill_lv)) {
-                        unit_skilluse_id(&sd->bl, target_id, 77, skill_lv);
-                        sd->canskill_tick = now + 1000; return;
-                    }
-                }
-            }
-            break;
-        }
-
-        case JOB_ASSASSIN:
-        case JOB_ASSASSIN_CROSS:
-        case JOB_ROGUE:
-        case JOB_STALKER:
-        {
-            int target_id = sd->ud.target;
-            if (!target_id) break;
-
-            // Double Strafe (Requires Bow)
-            if (get_aa_var(sd, "AA_USE_SKILL_DOUBLE_STRAFE") > 0) {
-                skill_lv = pc_checkskill(sd, 46);
-                if (skill_lv > 0 && sd->status.weapon == W_BOW && sd->battle_status.sp >= skill_get_sp(46, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 46, skill_lv);
-                    sd->canskill_tick = now + 800; return;
-                }
-            }
-
-            // Meteor Assault (AoE - Logic: Use if 2 or more mobs are nearby)
-            if (get_aa_var(sd, "AA_USE_SKILL_METEOR_ASSAULT") > 0 && mob_count >= 2) {
-                skill_lv = pc_checkskill(sd, 406);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(406, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 406, skill_lv);
-                    sd->canskill_tick = now + 1000; return;
-                }
-            }
-
-            // Soul Breaker (Mid-Range)
-            if (get_aa_var(sd, "AA_USE_SKILL_SOUL_BREAKER") > 0) {
-                skill_lv = pc_checkskill(sd, 379);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(379, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 379, skill_lv);
-                    sd->canskill_tick = now + 1200; return;
-                }
-            }
-
-            // Sonic Blow (Requires Katar)
-            if (get_aa_var(sd, "AA_USE_SKILL_SONIC_BLOW") > 0) {
-                skill_lv = pc_checkskill(sd, 136);
-                // Check if wearing a Katar before attempting
-                if (skill_lv > 0 && sd->status.weapon == W_KATAR && sd->battle_status.sp >= skill_get_sp(136, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 136, skill_lv);
-                    sd->canskill_tick = now + 2000; return; 
-                }
-            }
+            if (aa_can_use(sd, target_id, 406, 1000, "AA_USE_SKILL_METEOR_ASSAULT", 2, mob_count)) return;
+            if (aa_can_use(sd, target_id, 379, 1200, "AA_USE_SKILL_SOUL_BREAKER")) return;
+            if (weapon == W_KATAR && aa_can_use(sd, target_id, 136, 2000, "AA_USE_SKILL_SONIC_BLOW")) return;
             break;
         }
 
         case JOB_SUPER_NOVICE:
         {
-            int target_id = sd->ud.target;
-            if (!target_id) break;
-
-            // Fire Bolt (ID: 19)
-            if (get_aa_var(sd, "AA_USE_SKILL_FIRE_BOLT") > 0) {
-                skill_lv = pc_checkskill(sd, 19);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(19, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 19, skill_lv);
-                    sd->canskill_tick = now + 1000; return;
-                }
-            }
-
-            // Cold Bolt (ID: 14)
-            if (get_aa_var(sd, "AA_USE_SKILL_COLD_BOLT") > 0) {
-                skill_lv = pc_checkskill(sd, 14);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(14, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 14, skill_lv);
-                    sd->canskill_tick = now + 1000; return;
-                }
-            }
-
-            // Lightning Bolt (ID: 20)
-            if (get_aa_var(sd, "AA_USE_SKILL_LIGHTNING_BOLT") > 0) {
-                skill_lv = pc_checkskill(sd, 20);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(20, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 20, skill_lv);
-                    sd->canskill_tick = now + 1000; return;
-                }
-            }
-
-            // Soul Strike (ID: 13)
-            if (get_aa_var(sd, "AA_USE_SKILL_SOUL_STRIKE") > 0) {
-                skill_lv = pc_checkskill(sd, 13);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(13, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 13, skill_lv);
-                    sd->canskill_tick = now + 800; return;
-                }
-            }
-
-            // Thunder Storm (ID: 21) - AoE (2+ mobs)
-            if (get_aa_var(sd, "AA_USE_SKILL_THUNDER_STORM") > 0 && mob_count >= 2) {
-                skill_lv = pc_checkskill(sd, 21);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(21, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 21, skill_lv);
-                    sd->canskill_tick = now + 1500; return;
-                }
-            }
-
-            // Fire Ball (ID: 17) - AoE (2+ mobs)
-            if (get_aa_var(sd, "AA_USE_SKILL_FIRE_BALL") > 0 && mob_count >= 2) {
-                skill_lv = pc_checkskill(sd, 17);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(17, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 17, skill_lv);
-                    sd->canskill_tick = now + 1000; return;
-                }
-            }
-
-            // Napalm Beat (ID: 11) - AoE (2+ mobs)
-            if (get_aa_var(sd, "AA_USE_SKILL_NAPALM_BEAT") > 0 && mob_count >= 2) {
-                skill_lv = pc_checkskill(sd, 11);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(11, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 11, skill_lv);
-                    sd->canskill_tick = now + 800; return;
-                }
-            }
-
-            // Magnum Break (ID: 7) - AoE (2+ mobs)
-            if (get_aa_var(sd, "AA_USE_SKILL_MAGNUM_BREAK") > 0 && mob_count >= 2) {
-                skill_lv = pc_checkskill(sd, 7);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(7, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 7, skill_lv);
-                    sd->canskill_tick = now + 1200; return;
-                }
-            }
-
-            // Mammonite (ID: 42) - Requires 1000 Zeny
-            if (get_aa_var(sd, "AA_USE_SKILL_MAMMONITE") > 0 && sd->status.zeny >= 1000) {
-                skill_lv = pc_checkskill(sd, 42);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(42, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 42, skill_lv);
-                    sd->canskill_tick = now + 800; return;
-                }
-            }
-
-            // Bash (ID: 5)
-            if (get_aa_var(sd, "AA_USE_SKILL_BASH") > 0) {
-                skill_lv = pc_checkskill(sd, 5);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(5, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 5, skill_lv);
-                    sd->canskill_tick = now + 800; return;
-                }
-            }
+            if (aa_can_use(sd, target_id, 19, 1000, "AA_USE_SKILL_FIRE_BOLT")) return;
+            if (aa_can_use(sd, target_id, 14, 1000, "AA_USE_SKILL_COLD_BOLT")) return;
+            if (aa_can_use(sd, target_id, 21, 1500, "AA_USE_SKILL_THUNDER_STORM", 2, mob_count)) return;
+            if (sd->status.zeny >= 1000 && aa_can_use(sd, target_id, 42, 800, "AA_USE_SKILL_MAMMONITE")) return;
+            if (aa_can_use(sd, target_id, 5, 800, "AA_USE_SKILL_BASH")) return;
             break;
         }
 
         case JOB_NINJA:
         {
-            int target_id = sd->ud.target;
-            if (!target_id) break;
-
-            // Dragon Fire Formation (ID: 536) - AoE
-            if (get_aa_var(sd, "AA_USE_SKILL_DRAGON_FIRE") > 0 && mob_count >= 2) {
-                skill_lv = pc_checkskill(sd, 536);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(536, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 536, skill_lv);
-                    sd->canskill_tick = now + 1500; return;
-                }
-            }
-
-            // Crimson Fire Blossom (ID: 534)
-            if (get_aa_var(sd, "AA_USE_SKILL_FIRE_BLOSSOM") > 0) {
-                skill_lv = pc_checkskill(sd, 534);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(534, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 534, skill_lv);
-                    sd->canskill_tick = now + 1000; return;
-                }
-            }
-
-            // Lightning Spear of Ice (ID: 537)
-            if (get_aa_var(sd, "AA_USE_SKILL_SPEAR_ICE") > 0) {
-                skill_lv = pc_checkskill(sd, 537);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(537, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 537, skill_lv);
-                    sd->canskill_tick = now + 1000; return;
-                }
-            }
-
-            // Wind Blade (ID: 540)
-            if (get_aa_var(sd, "AA_USE_SKILL_WIND_BLADE") > 0) {
-                skill_lv = pc_checkskill(sd, 540);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(540, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 540, skill_lv);
-                    sd->canskill_tick = now + 800; return;
-                }
-            }
-
-            // North Wind (ID: 542) - AoE
-            if (get_aa_var(sd, "AA_USE_SKILL_NORTH_WIND") > 0 && mob_count >= 2) {
-                skill_lv = pc_checkskill(sd, 542);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(542, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 542, skill_lv);
-                    sd->canskill_tick = now + 1200; return;
-                }
-            }
-
-            // Throw Huuma Shuriken (ID: 525) - Requires Huuma Shuriken weapon
-            if (get_aa_var(sd, "AA_USE_SKILL_THROW_HUUMA") > 0 && sd->status.weapon == W_HUUMA) {
-                skill_lv = pc_checkskill(sd, 525);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(525, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 525, skill_lv);
-                    sd->canskill_tick = now + 1200; return;
-                }
-            }
-
-            // Throw Kunai (ID: 524) - Requires Kunai ammo
-            if (get_aa_var(sd, "AA_USE_SKILL_THROW_KUNAI") > 0) {
-                skill_lv = pc_checkskill(sd, 524);
-                // Source check for Kunai (Ammo type)
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(524, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 524, skill_lv);
-                    sd->canskill_tick = now + 800; return;
-                }
-            }
-
-            // Throw Shuriken (ID: 523)
-            if (get_aa_var(sd, "AA_USE_SKILL_THROW_SHURIKEN") > 0) {
-                skill_lv = pc_checkskill(sd, 523);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(523, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 523, skill_lv);
-                    sd->canskill_tick = now + 500; return;
-                }
-            }
-
-            // Throw Zeny (ID: 526)
-            if (get_aa_var(sd, "AA_USE_SKILL_THROW_ZENY") > 0 && sd->status.zeny >= 1000) {
-                skill_lv = pc_checkskill(sd, 526);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(526, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 526, skill_lv);
-                    sd->canskill_tick = now + 1000; return;
-                }
-            }
+            if (aa_can_use(sd, target_id, 536, 1500, "AA_USE_SKILL_DRAGON_FIRE", 2, mob_count)) return;
+            if (aa_can_use(sd, target_id, 534, 1000, "AA_USE_SKILL_FIRE_BLOSSOM")) return;
+            if (weapon == W_HUUMA && aa_can_use(sd, target_id, 525, 1200, "AA_USE_SKILL_THROW_HUUMA")) return;
+            if (aa_can_use(sd, target_id, 524, 800, "AA_USE_SKILL_THROW_KUNAI")) return;
             break;
         }
 
         case JOB_GUNSLINGER:
         {
-            int target_id = sd->ud.target;
-            if (!target_id) break;
-
-            // Rapid Shower (ID: 515) - Requires Pistol (Revolver)
-            if (get_aa_var(sd, "AA_USE_SKILL_RAPID_SHOWER") > 0 && sd->status.weapon == W_REVOLVER) {
-                skill_lv = pc_checkskill(sd, 515);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(515, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 515, skill_lv);
-                    sd->canskill_tick = now + 800; return;
-                }
-            }
-
-            // Tracking (ID: 512) - Requires Pistol or Rifle
-            if (get_aa_var(sd, "AA_USE_SKILL_TRACKING") > 0 && (sd->status.weapon == W_REVOLVER || sd->status.weapon == W_RIFLE)) {
-                skill_lv = pc_checkskill(sd, 512);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(512, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 512, skill_lv);
-                    sd->canskill_tick = now + 1500; return; // Longer cast/delay
-                }
-            }
-
-            // Piercing Shot (ID: 514) - Requires Rifle
-            if (get_aa_var(sd, "AA_USE_SKILL_PIERCING_SHOT") > 0 && sd->status.weapon == W_RIFLE) {
-                skill_lv = pc_checkskill(sd, 514);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(514, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 514, skill_lv);
-                    sd->canskill_tick = now + 1000; return;
-                }
-            }
-
-            // Full Buster (ID: 519) - Requires Shotgun
-            if (get_aa_var(sd, "AA_USE_SKILL_FULL_BUSTER") > 0 && sd->status.weapon == W_SHOTGUN) {
-                skill_lv = pc_checkskill(sd, 519);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(519, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 519, skill_lv);
-                    sd->canskill_tick = now + 2000; return; // High recoil delay
-                }
-            }
-
-            // Dust (ID: 518) - Requires Shotgun
-            if (get_aa_var(sd, "AA_USE_SKILL_DUST") > 0 && sd->status.weapon == W_SHOTGUN) {
-                skill_lv = pc_checkskill(sd, 518);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(518, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 518, skill_lv);
-                    sd->canskill_tick = now + 1000; return;
-                }
-            }
-
-            // Spread Attack (ID: 520) - Requires Shotgun (AoE)
-            if (get_aa_var(sd, "AA_USE_SKILL_SPREAD_ATTACK") > 0 && sd->status.weapon == W_SHOTGUN && mob_count >= 2) {
-                skill_lv = pc_checkskill(sd, 520);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(520, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 520, skill_lv);
-                    sd->canskill_tick = now + 1200; return;
-                }
-            }
-
-            // Disarm (ID: 513) - Requires Rifle
-            if (get_aa_var(sd, "AA_USE_SKILL_DISARM") > 0 && sd->status.weapon == W_RIFLE) {
-                skill_lv = pc_checkskill(sd, 513);
-                if (skill_lv > 0 && sd->battle_status.sp >= skill_get_sp(513, skill_lv)) {
-                    unit_skilluse_id(&sd->bl, target_id, 513, skill_lv);
-                    sd->canskill_tick = now + 1000; return;
-                }
-            }
+            if (weapon == W_REVOLVER && aa_can_use(sd, target_id, 515, 800, "AA_USE_SKILL_RAPID_SHOWER")) return;
+            if (weapon == W_SHOTGUN && aa_can_use(sd, target_id, 519, 2000, "AA_USE_SKILL_FULL_BUSTER")) return;
+            if (weapon == W_SHOTGUN && aa_can_use(sd, target_id, 520, 1200, "AA_USE_SKILL_SPREAD_ATTACK", 2, mob_count)) return;
             break;
         }
 

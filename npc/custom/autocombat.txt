@@ -68,6 +68,9 @@ OnSelectAttackSkills:
         if (getskilllv(253) > 0){ set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_HOLY_CROSS ? .@on$ : .@off$) + "] Holy Cross"; set .@s_var$[.@count], "AA_USE_SKILL_HOLY_CROSS"; set .@count, .@count + 1; }
         if (getskilllv(367) > 0){ set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_PRESSURE ? .@on$ : .@off$) + "] Pressure"; set .@s_var$[.@count], "AA_USE_SKILL_PRESSURE"; set .@count, .@count + 1; }
         if (getskilllv(480) > 0){ set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_SHIELD_CHAIN ? .@on$ : .@off$) + "] Shield Chain"; set .@s_var$[.@count], "AA_USE_SKILL_SHIELD_CHAIN"; set .@count, .@count + 1; }
+        if (getskilllv(397) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_SPIRAL_PIERCE ? .@on$ : .@off$) + "] Spiral Pierce"; set .@s_var$[.@count], "AA_USE_SKILL_SPIRAL_PIERCE"; set .@count, .@count + 1; }
+        if (getskilllv(398) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_HEAD_CRUSH ? .@on$ : .@off$) + "] Head Crush"; set .@s_var$[.@count], "AA_USE_SKILL_HEAD_CRUSH"; set .@count, .@count + 1; }
+        if (getskilllv(399) > 0) { set .@menu$, .@menu$ + ":~ [" + (AA_USE_SKILL_JOINT_BEAT ? .@on$ : .@off$) + "] Joint Beat"; set .@s_var$[.@count], "AA_USE_SKILL_JOINT_BEAT"; set .@count, .@count + 1; }
     }
 
     // --- MAGE TREE ---
